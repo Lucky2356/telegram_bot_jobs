@@ -150,9 +150,9 @@ class Scheduler:
 
         card = format_vacancy_card(vac_data) + "\n\n⚡"
         try:
-            if user.telegram_id not in self._user_buffers:
-                self._user_buffers[user.telegram_id] = []
-            self._user_buffers[user.telegram_id].append(card)
+            if user.id not in self._user_buffers:
+                self._user_buffers[user.id] = []
+            self._user_buffers[user.id].append(card)
             await self.db.mark_sent(user.id, vac.id, filter_id=vf.id)
             logger.info("Buffered vacancy %s for user %s", vac_data.title[:50], user.telegram_id)
         except Exception as e:
