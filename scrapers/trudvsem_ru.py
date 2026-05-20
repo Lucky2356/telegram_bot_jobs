@@ -17,17 +17,20 @@ class TrudvsemScraper(BaseScraper):
         self, keywords: list[str], city: str | None = None
     ) -> list[VacancyData]:
         query = " ".join(keywords)
-        params: dict = {"keyword": query, "offset": 0, "limit": 100}
-
-        try:
-            resp = await self.client.get(TRUDVSEM_API, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception:
-            return []
-
         results: list[VacancyData] = []
-        vacancies = data.get("results", {}).get("vacancies", [])
+        max_pages = 3
+        limit = 100
+
+        for page in range(max_pages):
+            params: dict = {"keyword": query, "offset": page * limit, "limit": limit}
+            try:
+                resp = await self.client.get(TRUDVSEM_API, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception:
+                break
+
+            vacancies = data.get("results", {}).get("vacancies", [])
         for item in vacancies:
             try:
                 v = item.get("vacancy", {})

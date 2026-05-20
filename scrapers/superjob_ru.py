@@ -16,101 +16,68 @@ class SuperJobScraper(BaseScraper):
     async def close(self):
         await self.client.aclose()
 
-    async def search(
-        self, keywords: list[str], city: str | None = None
-    ) -> list[VacancyData]:
+    async def search(self, keywords: list[str], city: str | None = None) -> list[VacancyData]:
         if not settings.SUPERJOB_API_KEY:
             return []
 
         query = " ".join(keywords)
-        params: dict = {
-            "keyword": query,
-            "count": 50,
-            "page": 0,
-        }
+        base_params: dict = {"keyword": query, "count": 50}
         if city:
-            params["town"] = CITIES.get(city, city)
-
-        try:
-            resp = await self.client.get(SJ_API, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception:
-            return []
+            base_params["town"] = CITIES.get(city, city)
 
         results: list[VacancyData] = []
-        for item in data.get("objects", []):
-            salary_text = None
-            payment_from = item.get("payment_from")
-            payment_to = item.get("payment_to")
-            currency = item.get("currency", "rub")
-            if payment_from or payment_to:
-                parts = []
-                if payment_from:
-                    parts.append(f"от {payment_from:,}".replace(",", " "))
-                if payment_to:
-                    parts.append(f"до {payment_to:,}".replace(",", " "))
-                salary_text = " ".join(parts) + f" {currency.upper()}"
+        for page in range(3):
+            params = {**base_params, "page": page}
+            try:
+                resp = await self.client.get(SJ_API, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception:
+                break
 
-            emp_type = None
-            tof = item.get("type_of_work", {})
-            if tof:
-                tid = tof.get("id")
-                mapping = {
-                    1: "full",
-                    2: "part",
-                    3: "project",
-                    4: "part",
-                    5: "part",
-                    6: "remote",
-                }
-                emp_type = mapping.get(tid)
+            for item in data.get("objects", []):
+                salary_text = None
+                payment_from = item.get("payment_from")
+                payment_to = item.get("payment_to")
+                currency = item.get("currency", "rub")
+                if payment_from or payment_to:
+                    parts = []
+                    if payment_from:
+                        parts.append(f"от {payment_from:,}".replace(",", " "))
+                    if payment_to:
+                        parts.append(f"до {payment_to:,}".replace(",", " "))
+                    salary_text = " ".join(parts) + f" {currency.upper()}"
 
-            emp_form = item.get("employment", {})
-            if emp_form:
-                eid = emp_form.get("id")
-                emp_mapping = {
-                    1: "full",
-                    2: "part",
-                    3: "project",
-                    4: "internship",
-                }
-                if eid in emp_mapping:
-                    emp_type = emp_mapping[eid]
+                emp_type = None
+                tof = item.get("type_of_work", {})
+                if tof:
+                    emp_type = {1: "full", 2: "part", 3: "project", 4: "part", 5: "part", 6: "remote"}.get(tof.get("id"))
 
-            published = None
-            if item.get("date_published"):
-                try:
-                    published = datetime.fromtimestamp(item["date_published"])
-                except Exception:
-                    pass
+                emp_form = item.get("employment", {})
+                if emp_form and emp_form.get("id") in {1: "full", 2: "part", 3: "project", 4: "internship"}:
+                    emp_type = {1: "full", 2: "part", 3: "project", 4: "internship"}.get(emp_form.get("id"))
 
-            exp = None
-            sj_exp = item.get("experience", {})
-            if sj_exp:
-                eid = sj_exp.get("id")
-                exp_map = {1: "no", 2: "1-3", 3: "3-6", 4: "6+"}
-                exp = exp_map.get(eid)
+                exp = None
+                sj_exp = item.get("experience", {})
+                if sj_exp:
+                    exp = {1: "no", 2: "1-3", 3: "3-6", 4: "6+"}.get(sj_exp.get("id"))
 
-            town = item.get("town", {})
-            city_name = town.get("title") if town else None
+                published = None
+                if item.get("date_published"):
+                    try:
+                        published = datetime.fromtimestamp(item["date_published"])
+                    except Exception:
+                        pass
 
-            results.append(VacancyData(
-                source="superjob",
-                source_id=str(item["id"]),
-                title=item.get("profession", ""),
-                company=item.get("firm_name") or (
-                    item.get("firm", {}).get("title") if item.get("firm") else None
-                ),
-                salary_text=salary_text,
-                salary_min=payment_from,
-                salary_max=payment_to,
-                employment_type=emp_type,
-                experience=exp,
-                city=city_name,
-                description=item.get("candidat"),
-                url=item.get("link", ""),
-                published_at=published,
-            ))
+                town = item.get("town", {})
+                city_name = town.get("title") if town else None
+
+                results.append(VacancyData(
+                    source="superjob", source_id=str(item["id"]), title=item.get("profession", ""),
+                    company=item.get("firm_name") or (item.get("firm", {}).get("title") if item.get("firm") else None),
+                    salary_text=salary_text, salary_min=payment_from, salary_max=payment_to,
+                    employment_type=emp_type, experience=exp, city=city_name,
+                    description=item.get("candidat"), url=item.get("link", ""), published_at=published,
+                ))
 
         return results

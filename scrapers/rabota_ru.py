@@ -19,16 +19,24 @@ class RabotaRuScraper(BaseScraper):
         self, keywords: list[str], city: str | None = None
     ) -> list[VacancyData]:
         query = " ".join(keywords)
-        params: dict = {"query": query}
-        if city:
-            params["city"] = city
-
-        try:
-            resp = await self.client.get(RABOTA_URL, params=params)
-            resp.raise_for_status()
-            return self._parse_html(resp.text)
-        except Exception:
-            return []
+        results: list[VacancyData] = []
+        seen: set = set()
+        for page in range(3):
+            params: dict = {"query": query}
+            if city:
+                params["city"] = city
+            params["page"] = page
+            try:
+                resp = await self.client.get(RABOTA_URL, params=params)
+                resp.raise_for_status()
+                page_results = self._parse_html(resp.text)
+                for v in page_results:
+                    if v.source_id not in seen:
+                        seen.add(v.source_id)
+                        results.append(v)
+            except Exception:
+                break
+        return results
 
     def _parse_html(self, html: str) -> list[VacancyData]:
         results: list[VacancyData] = []
@@ -44,7 +52,6 @@ class RabotaRuScraper(BaseScraper):
         if not cards:
             cards = soup.find_all("div", class_=re.compile(r"(vacancy|card|item)", re.I))
 
-        seen = set()
         for card in cards:
             try:
                 link_tag = (
@@ -59,10 +66,6 @@ class RabotaRuScraper(BaseScraper):
                     href = "https://rabota.ru" + href
 
                 source_id = href.split("/")[-1] or href
-                if source_id in seen:
-                    continue
-                seen.add(source_id)
-
                 title = link_tag.get_text(strip=True) or ""
                 company = None
                 for sel in [
