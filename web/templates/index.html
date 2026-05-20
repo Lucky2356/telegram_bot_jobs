@@ -216,6 +216,7 @@
     <button class="btn btn-primary" onclick="checkNow()">🔍 Проверить сейчас</button>
     <button class="btn btn-ghost" onclick="openCreate()">➕ Создать фильтр</button>
     <span class="actions-hint">Автоматически раз в час</span>
+    <span class="actions-hint" id="refresh-info">🔄 страница обновляется каждые 30 с</span>
   </div>
   <div id="check-result"></div>
 
@@ -511,6 +512,28 @@
   document.getElementById('editModal').addEventListener('click', function(e) {
     if (e.target === this) closeEdit();
   });
+
+  // Auto-refresh page every 30s (skips when modal is open)
+  let refreshTimer = setTimeout(() => location.reload(), 30000);
+  function refreshIfIdle() {
+    clearTimeout(refreshTimer);
+    if (!document.getElementById('editModal').classList.contains('active')) {
+      location.reload();
+    } else {
+      refreshTimer = setTimeout(refreshIfIdle, 5000);
+    }
+  }
+  setInterval(() => {
+    clearTimeout(refreshTimer);
+    if (!document.getElementById('editModal').classList.contains('active')) {
+      refreshTimer = setTimeout(() => location.reload(), 30000);
+    }
+  }, 5000);
+  // Show next refresh time
+  setInterval(() => {
+    const el = document.getElementById('refresh-info');
+    if (el) el.textContent = '🔄 страница обновляется каждые 30 с';
+  }, 1000);
 </script>
 </body>
 </html>
