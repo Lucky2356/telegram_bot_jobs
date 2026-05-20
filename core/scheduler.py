@@ -19,6 +19,7 @@ class Scheduler:
         self.db = db
         self.bot = bot
         self._scrapers: dict[str, BaseScraper] = {}
+        self._user_buffers: dict[int, list[str]] = {}
 
     def _get_scraper(self, site: str) -> BaseScraper | None:
         if site not in self._scrapers:
@@ -44,6 +45,7 @@ class Scheduler:
 
     async def run_check(self):
         logger.info("Starting vacancy check...")
+        self._user_buffers.clear()
         filters = await self.db.get_all_active_filters()
         if not filters:
             logger.info("No active filters, skipping check.")
@@ -52,6 +54,23 @@ class Scheduler:
         for vf in filters:
             await self._check_filter(vf)
 
+        for user_id, vacancies in self._user_buffers.items():
+            if not vacancies:
+                continue
+            header = f"🔍 <b>Найдено {len(vacancies)} новых вакансий</b>\n\n"
+            body = "\n\n".join(vacancies)
+            try:
+                user = await self.db.get_user(user_id)
+                if user:
+                    await self.bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=header + body,
+                        disable_web_page_preview=True,
+                    )
+            except Exception as e:
+                logger.warning("Failed to send digest: %s", e)
+
+        self._user_buffers.clear()
         logger.info("Vacancy check completed.")
 
     async def _check_filter(self, vf):
@@ -64,6 +83,7 @@ class Scheduler:
         sites = vf.get_sites()
         emp_types = vf.get_employment_types()
         exclude_kw = vf.get_exclude_keywords()
+        experience = vf.experience
 
         for site_key in sites:
             scraper = self._get_scraper(site_key)
@@ -78,7 +98,7 @@ class Scheduler:
             for vac_data in vacancies:
                 try:
                     await self._process_vacancy(
-                        vac_data, vf, user, keywords, emp_types, exclude_kw,
+                        vac_data, vf, user, keywords, emp_types, exclude_kw, experience,
                     )
                 except Exception as e:
                     logger.warning("Process vacancy error: %s", e)
@@ -87,6 +107,7 @@ class Scheduler:
         self, vac_data: VacancyData, vf, user,
         keywords: list[str], emp_types: list[str],
         exclude_keywords: list[str] | None = None,
+        experience: str | None = None,
     ):
         if not self._matches_keywords(vac_data, keywords):
             return
@@ -95,6 +116,8 @@ class Scheduler:
         if emp_types and vac_data.employment_type and vac_data.employment_type not in emp_types:
             return
         if vf.city and vac_data.city and vf.city.lower() not in vac_data.city.lower():
+            return
+        if experience and vac_data.experience and vac_data.experience != experience:
             return
 
         vac = await self.db.add_vacancy(vac_data)
@@ -107,22 +130,15 @@ class Scheduler:
         if await self.db.is_blocked(user.id, vac_data.company, vac_data.title):
             return
 
-        card = format_vacancy_card(vac_data)
+        card = format_vacancy_card(vac_data) + "\n\n⚡"
         try:
-            msg = await self.bot.send_message(
-                chat_id=user.telegram_id,
-                text=card,
-                disable_web_page_preview=True,
-            )
-            await self.bot.send_message(
-                chat_id=user.telegram_id,
-                text="⚡",
-                reply_markup=build_vacancy_actions_keyboard(vac.id, vac_data.source, vac_data.url),
-            )
+            if user.telegram_id not in self._user_buffers:
+                self._user_buffers[user.telegram_id] = []
+            self._user_buffers[user.telegram_id].append(card)
             await self.db.mark_sent(user.id, vac.id)
-            logger.info("Sent vacancy %s to user %s", vac_data.title[:50], user.telegram_id)
+            logger.info("Buffered vacancy %s for user %s", vac_data.title[:50], user.telegram_id)
         except Exception as e:
-            logger.warning("Failed to send message: %s", e)
+            logger.warning("Failed to buffer vacancy: %s", e)
 
     def _matches_keywords(self, vac: VacancyData, keywords: list[str]) -> bool:
         title_lower = vac.title.lower()

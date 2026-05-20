@@ -30,6 +30,7 @@ class VacancyFilter(Base):
     employment_types: Mapped[str] = mapped_column(Text, default="[]")
     sites: Mapped[str] = mapped_column(Text, default="[]")
     exclude_keywords: Mapped[str] = mapped_column(Text, default="[]")
+    experience: Mapped[str | None] = mapped_column(String(10))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -68,6 +69,7 @@ class Vacancy(Base):
     company: Mapped[str | None] = mapped_column(String(500))
     salary_text: Mapped[str | None] = mapped_column(String(255))
     employment_type: Mapped[str | None] = mapped_column(String(50))
+    experience: Mapped[str | None] = mapped_column(String(10))
     city: Mapped[str | None] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text)
     url: Mapped[str] = mapped_column(String(1000))

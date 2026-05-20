@@ -50,6 +50,7 @@ async def main_add(callback: CallbackQuery, state: FSMContext):
     await state.update_data(
         selected_keywords=[],
         excluded_keywords=[],
+        experience=None,
         city=None,
         salary_key=None,
         salary_min=None,

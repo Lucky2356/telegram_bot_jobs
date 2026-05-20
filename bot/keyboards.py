@@ -10,6 +10,9 @@ class WizardAction(StrEnum):
     EXCLUDE_TOGGLE = "ex_kw"
     EXCLUDE_DONE = "ex_done"
     CITY_SELECT = "city"
+    CITY_DONE_SKIP = "city_done"
+    EXPERIENCE_SELECT = "exp"
+    EXPERIENCE_DONE = "exp_done"
     SALARY_SELECT = "sal"
     EMPLOYMENT_TOGGLE = "emp"
     EMPLOYMENT_DONE = "emp_done"
@@ -52,6 +55,13 @@ CITIES: dict[str, str] = {
     "rostov": "Ростов-на-Дону",
 }
 
+EXPERIENCE: dict[str, str] = {
+    "no": "Без опыта",
+    "1-3": "1–3 года",
+    "3-6": "3–6 лет",
+    "6+": "Более 6 лет",
+}
+
 SALARIES: list[tuple[str, str, int | None, int | None]] = [
     ("any", "Любая", None, None),
     ("0-100", "до 100 000 ₽", None, 100_000),
@@ -59,6 +69,7 @@ SALARIES: list[tuple[str, str, int | None, int | None]] = [
     ("200-300", "200 000 – 300 000 ₽", 200_000, 300_000),
     ("300-500", "300 000 – 500 000 ₽", 300_000, 500_000),
     ("500-0", "от 500 000 ₽", 500_000, None),
+    ("custom", "🖊 Своя сумма", None, None),
 ]
 
 EMPLOYMENT_TYPES: dict[str, str] = {
@@ -159,7 +170,25 @@ def build_city_keyboard(selected: str | None) -> InlineKeyboardMarkup:
     builder.row(_btn("🌍 Любой (все города)", WizardAction.CITY_SELECT, value="any"))
     builder.row(
         _btn("⬅️ Назад", WizardAction.EXCLUDE_DONE),
-        _btn("✅ Далее →", WizardAction.SALARY_SELECT, value="__done__"),
+        _btn("✅ Далее →", WizardAction.EXPERIENCE_DONE, value="__done__"),
+    )
+    builder.row(_btn("❌ Отмена", WizardAction.CANCEL))
+    return builder.as_markup()
+
+
+def build_experience_keyboard(selected: str | None) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for key, label in EXPERIENCE.items():
+        text = f"✅ {label}" if key == selected else label
+        builder.row(
+            InlineKeyboardButton(
+                text=text,
+                callback_data=FilterCallback(action=WizardAction.EXPERIENCE_SELECT, value=key).pack(),
+            )
+        )
+    builder.row(
+        _btn("⬅️ Назад", WizardAction.CITY_SELECT, value="__back__"),
+        _btn("✅ Далее →", WizardAction.EXPERIENCE_DONE, value="__done__"),
     )
     builder.row(_btn("❌ Отмена", WizardAction.CANCEL))
     return builder.as_markup()
@@ -176,7 +205,7 @@ def build_salary_keyboard(selected_key: str | None) -> InlineKeyboardMarkup:
             )
         )
     builder.row(
-        _btn("⬅️ Назад", WizardAction.CITY_SELECT, value="__back__"),
+        _btn("⬅️ Назад", WizardAction.EXPERIENCE_DONE, value="__back__"),
         _btn("✅ Далее →", WizardAction.EMPLOYMENT_DONE, value="__done__"),
     )
     builder.row(_btn("❌ Отмена", WizardAction.CANCEL))

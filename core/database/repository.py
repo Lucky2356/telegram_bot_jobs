@@ -44,6 +44,7 @@ class Database:
         city: str | None, salary_min: int | None,
         salary_max: int | None, employment_types: list[str],
         sites: list[str], exclude_keywords: list[str] | None = None,
+        experience: str | None = None,
     ) -> VacancyFilter:
         async with self.session_factory() as session:
             vf = VacancyFilter(
@@ -56,6 +57,7 @@ class Database:
                 employment_types=json.dumps(employment_types, ensure_ascii=False),
                 sites=json.dumps(sites, ensure_ascii=False),
                 exclude_keywords=json.dumps(exclude_keywords or [], ensure_ascii=False),
+                experience=experience,
             )
             session.add(vf)
             await session.commit()
@@ -101,6 +103,7 @@ class Database:
         salary_min: int | None, salary_max: int | None,
         employment_types: list[str], sites: list[str],
         exclude_keywords: list[str] | None = None,
+        experience: str | None = None,
     ) -> VacancyFilter | None:
         async with self.session_factory() as session:
             result = await session.execute(
@@ -118,6 +121,8 @@ class Database:
             vf.set_sites(sites)
             if exclude_keywords is not None:
                 vf.set_exclude_keywords(exclude_keywords)
+            if experience is not None:
+                vf.experience = experience
             await session.commit()
             await session.refresh(vf)
             return vf
@@ -147,6 +152,7 @@ class Database:
                 company=data.company,
                 salary_text=data.salary_text,
                 employment_type=data.employment_type,
+                experience=data.experience,
                 city=data.city,
                 description=data.description,
                 url=data.url,

@@ -11,6 +11,7 @@ class VacancyData:
     company: str | None = None
     salary_text: str | None = None
     employment_type: str | None = None
+    experience: str | None = None
     city: str | None = None
     description: str | None = None
     url: str = ""

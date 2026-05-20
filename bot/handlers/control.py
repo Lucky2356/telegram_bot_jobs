@@ -5,7 +5,7 @@ from aiogram.filters import Command
 from bot.keyboards import (
     FilterCallback, WizardAction,
     build_filters_list_keyboard, build_start_keyboard,
-    build_filter_detail_keyboard, EMPLOYMENT_TYPES, SITES, SALARIES,
+    build_filter_detail_keyboard, EMPLOYMENT_TYPES, SITES, SALARIES, EXPERIENCE,
 )
 from core.database.repository import Database
 from core.scheduler import Scheduler
@@ -84,6 +84,8 @@ async def on_filter_view(callback: CallbackQuery, db: Database):
         lines.append("<b>Зарплата:</b> Любая")
     emp_labels = [EMPLOYMENT_TYPES.get(e, e) for e in vf.get_employment_types()]
     lines.append(f"<b>Занятость:</b> {', '.join(emp_labels) or 'Любая'}")
+    if vf.experience:
+        lines.append(f"<b>Опыт:</b> {EXPERIENCE.get(vf.experience, vf.experience)}")
     site_labels = [SITES.get(s, s) for s in vf.get_sites()]
     lines.append(f"<b>Сайты:</b> {', '.join(site_labels)}")
     await callback.message.edit_text(
@@ -111,6 +113,7 @@ async def on_filter_clone(callback: CallbackQuery, db: Database):
         employment_types=vf.get_employment_types(),
         sites=vf.get_sites(),
         exclude_keywords=vf.get_exclude_keywords(),
+        experience=vf.experience,
     )
     user = await db.get_or_create_user(callback.from_user.id)
     filters = await db.get_user_filters(user.id)

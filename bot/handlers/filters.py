@@ -6,11 +6,12 @@ from aiogram.fsm.state import State, StatesGroup
 from bot.keyboards import (
     FilterCallback, WizardAction,
     build_keywords_keyboard, build_exclude_keywords_keyboard,
-    build_city_keyboard, build_salary_keyboard,
+    build_city_keyboard, build_experience_keyboard,
+    build_salary_keyboard,
     build_employment_keyboard, build_sites_keyboard,
     build_confirm_keyboard, build_start_keyboard,
     build_filters_list_keyboard,
-    SALARIES, EMPLOYMENT_TYPES, SITES,
+    SALARIES, EXPERIENCE, EMPLOYMENT_TYPES, SITES,
 )
 from core.database.repository import Database
 
@@ -21,7 +22,9 @@ class FilterWizard(StatesGroup):
     keywords = State()
     exclude_keywords = State()
     city = State()
+    experience = State()
     salary = State()
+    custom_salary = State()
     employment = State()
     sites = State()
     confirm = State()
@@ -32,6 +35,7 @@ async def cmd_add_filter(message: Message, state: FSMContext):
     await state.update_data(
         selected_keywords=[],
         excluded_keywords=[],
+        experience=None,
         city=None,
         salary_key=None,
         salary_min=None,
@@ -138,11 +142,45 @@ async def on_city_select(callback: CallbackQuery, state: FSMContext):
 
 
 async def on_city_done(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(FilterWizard.experience)
+    data = await state.get_data()
+    exp = data.get("experience", None)
+    await callback.message.edit_text(
+        "Шаг 4 — Выбери требуемый опыт работы",
+        reply_markup=build_experience_keyboard(exp),
+    )
+    await callback.answer()
+
+
+@router.callback_query(FilterCallback.filter(F.action == WizardAction.EXPERIENCE_SELECT))
+async def on_experience_select(callback: CallbackQuery, state: FSMContext):
+    value = FilterCallback.unpack(callback.data).value
+    if value == "__done__":
+        await on_experience_done(callback, state)
+        return
+    if value == "__back__":
+        data = await state.get_data()
+        city = data.get("city", None)
+        await state.set_state(FilterWizard.city)
+        await callback.message.edit_text(
+            "Шаг 3 — Выбери город",
+            reply_markup=build_city_keyboard(city),
+        )
+        await callback.answer()
+        return
+    await state.update_data(experience=value)
+    await callback.message.edit_reply_markup(
+        reply_markup=build_experience_keyboard(value)
+    )
+    await callback.answer()
+
+
+async def on_experience_done(callback: CallbackQuery, state: FSMContext):
     await state.set_state(FilterWizard.salary)
     data = await state.get_data()
     salary_key = data.get("salary_key", None)
     await callback.message.edit_text(
-        "Шаг 4 — Выбери диапазон зарплаты",
+        "Шаг 5 — Выбери зарплату",
         reply_markup=build_salary_keyboard(salary_key),
     )
     await callback.answer()
@@ -156,26 +194,57 @@ async def on_salary_select(callback: CallbackQuery, state: FSMContext):
         return
     if value == "__back__":
         data = await state.get_data()
-        city = data.get("city", None)
-        await state.set_state(FilterWizard.city)
+        exp = data.get("experience", None)
+        await state.set_state(FilterWizard.experience)
         await callback.message.edit_text(
-            "Шаг 3 — Выбери город",
-            reply_markup=build_city_keyboard(city),
+            "Шаг 4 — Выбери требуемый опыт работы",
+            reply_markup=build_experience_keyboard(exp),
         )
         await callback.answer()
         return
-
-    salary_min, salary_max = None, None
+    if value == "custom":
+        await state.set_state(FilterWizard.custom_salary)
+        await callback.message.edit_text(
+            "Введи желаемую зарплату цифрой (например: 250000)\n"
+            "Или диапазон через дефис (например: 200000-350000)",
+        )
+        await callback.answer()
+        return
     for key, _, smin, smax in SALARIES:
         if key == value:
-            salary_min = smin
-            salary_max = smax
+            await state.update_data(salary_key=value, salary_min=smin, salary_max=smax)
             break
-    await state.update_data(salary_key=value, salary_min=salary_min, salary_max=salary_max)
     await callback.message.edit_reply_markup(
         reply_markup=build_salary_keyboard(value)
     )
     await callback.answer()
+
+
+@router.message(FilterWizard.custom_salary)
+async def on_custom_salary(message: Message, state: FSMContext):
+    text = message.text.strip().replace(" ", "").replace(",", ".")
+    import re
+    nums = re.findall(r"\d+", text)
+    if not nums:
+        await message.answer("Пожалуйста, введи число (например: 250000)")
+        return
+    if len(nums) == 1:
+        salary_min = int(nums[0])
+        salary_max = None
+    else:
+        salary_min = min(int(nums[0]), int(nums[1]))
+        salary_max = max(int(nums[0]), int(nums[1]))
+
+    await state.update_data(salary_key="custom", salary_min=salary_min, salary_max=salary_max)
+    await state.set_state(FilterWizard.employment)
+
+    data = await state.get_data()
+    emp_types = data.get("employment_types", [])
+    await message.answer(
+        "Шаг 6 — Выбери тип занятости\n\n"
+        "Можно выбрать несколько вариантов.",
+        reply_markup=build_employment_keyboard(emp_types),
+    )
 
 
 async def on_salary_done(callback: CallbackQuery, state: FSMContext):
@@ -211,14 +280,15 @@ async def on_employment_done(callback: CallbackQuery, state: FSMContext):
     value = FilterCallback.unpack(callback.data).value
     if value == "__back__":
         data = await state.get_data()
-        salary_key = data.get("salary_key", None)
-        await state.set_state(FilterWizard.salary)
+        exp = data.get("experience", None)
+        await state.set_state(FilterWizard.experience)
         await callback.message.edit_text(
-            "Шаг 4 — Выбери диапазон зарплаты",
-            reply_markup=build_salary_keyboard(salary_key),
+            "Шаг 4 — Выбери требуемый опыт работы",
+            reply_markup=build_experience_keyboard(exp),
         )
         await callback.answer()
         return
+
     await state.set_state(FilterWizard.sites)
     data = await state.get_data()
     sites = data.get("sites", [])
@@ -294,6 +364,9 @@ async def on_site_done(callback: CallbackQuery, state: FSMContext):
         lines.append(f"<b>Зарплата:</b> {' '.join(parts)} ₽")
     else:
         lines.append("<b>Зарплата:</b> Любая")
+    exp = data.get("experience")
+    if exp:
+        lines.append(f"<b>Опыт:</b> {EXPERIENCE.get(exp, exp)}")
     emp_labels = [EMPLOYMENT_TYPES.get(e, e) for e in data.get("employment_types", [])]
     lines.append(f"<b>Тип занятости:</b> {', '.join(emp_labels) or 'Любой'}")
     site_labels = [SITES.get(s, s) for s in sites]
@@ -321,6 +394,7 @@ async def on_confirm(callback: CallbackQuery, state: FSMContext, db: Database):
         employment_types=data["employment_types"],
         sites=data["sites"],
         exclude_keywords=data.get("excluded_keywords", []),
+        experience=data.get("experience"),
     )
     await state.clear()
     await callback.message.edit_text(

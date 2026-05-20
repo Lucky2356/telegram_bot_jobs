@@ -84,6 +84,13 @@ class SuperJobScraper(BaseScraper):
                 except Exception:
                     pass
 
+            exp = None
+            sj_exp = item.get("experience", {})
+            if sj_exp:
+                eid = sj_exp.get("id")
+                exp_map = {1: "no", 2: "1-3", 3: "3-6", 4: "6+"}
+                exp = exp_map.get(eid)
+
             town = item.get("town", {})
             city_name = town.get("title") if town else None
 
@@ -96,6 +103,7 @@ class SuperJobScraper(BaseScraper):
                 ),
                 salary_text=salary_text,
                 employment_type=emp_type,
+                experience=exp,
                 city=city_name,
                 description=item.get("candidat"),
                 url=item.get("link", ""),

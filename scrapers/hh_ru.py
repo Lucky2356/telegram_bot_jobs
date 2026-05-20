@@ -113,6 +113,18 @@ class HHScraper(BaseScraper):
             if schedule and schedule.get("id") == "remote":
                 emp_type = "remote"
 
+            exp = None
+            experience = item.get("experience")
+            if experience:
+                exp_id = experience.get("id")
+                exp_map = {
+                    "noExperience": "no",
+                    "between1And3": "1-3",
+                    "between3And6": "3-6",
+                    "moreThan6": "6+",
+                }
+                exp = exp_map.get(exp_id)
+
             published = None
             if item.get("published_at"):
                 try:
@@ -135,6 +147,7 @@ class HHScraper(BaseScraper):
                 company=item.get("employer", {}).get("name") if item.get("employer") else None,
                 salary_text=salary_text,
                 employment_type=emp_type,
+                experience=exp,
                 city=city_name,
                 description=desc,
                 url=item.get("alternate_url", ""),
