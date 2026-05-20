@@ -375,7 +375,7 @@
     html += '<div class="form-group"><label>Ключевые слова</label>';
     for (const [group, items] of Object.entries(KEYWORDS)) {
       const groupItems = {};
-      for (const kw of items) groupItems[kw] = kw;
+      for (const kw of Object.keys(items)) groupItems[kw] = kw;
       html += buildCheckboxGroup(group, groupItems, f.keywords);
     }
     html += '</div>';
@@ -427,7 +427,7 @@
     html += '<div class="form-group"><label>Ключевые слова</label>';
     for (const [group, items] of Object.entries(KEYWORDS)) {
       const groupItems = {};
-      for (const kw of items) groupItems[kw] = kw;
+      for (const kw of Object.keys(items)) groupItems[kw] = kw;
       html += buildCheckboxGroup(group, groupItems, []);
     }
     html += '</div>';
