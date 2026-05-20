@@ -39,6 +39,10 @@ class SuperJobScraper(BaseScraper):
                 salary_text = None
                 payment_from = item.get("payment_from")
                 payment_to = item.get("payment_to")
+                if payment_from == 0:
+                    payment_from = None
+                if payment_to == 0:
+                    payment_to = None
                 currency = item.get("currency", "rub")
                 if payment_from or payment_to:
                     parts = []

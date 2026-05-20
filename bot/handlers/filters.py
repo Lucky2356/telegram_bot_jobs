@@ -384,16 +384,18 @@ async def on_site_done(callback: CallbackQuery, state: FSMContext):
 async def on_confirm(callback: CallbackQuery, state: FSMContext, db: Database):
     data = await state.get_data()
     user = await db.get_or_create_user(callback.from_user.id)
+    kws = list(dict.fromkeys(data["selected_keywords"]))
+    exc = list(dict.fromkeys(data.get("excluded_keywords", [])))
     vf = await db.create_filter(
         user_id=user.id,
         name=data["filter_name"],
-        keywords=data["selected_keywords"],
+        keywords=kws,
         city=data["city"],
         salary_min=data["salary_min"],
         salary_max=data["salary_max"],
         employment_types=data["employment_types"],
         sites=data["sites"],
-        exclude_keywords=data.get("excluded_keywords", []),
+        exclude_keywords=exc,
         experience=data.get("experience"),
     )
     await state.clear()

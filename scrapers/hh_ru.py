@@ -78,6 +78,10 @@ class HHScraper(BaseScraper):
                 if salary:
                     salary_min = salary.get("from")
                     salary_max = salary.get("to")
+                    if salary_min == 0:
+                        salary_min = None
+                    if salary_max == 0:
+                        salary_max = None
                     parts = []
                     if salary_min:
                         parts.append(f"от {salary_min:,}".replace(",", " "))

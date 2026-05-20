@@ -42,13 +42,13 @@ class VacancyFilter(Base):
         return json.loads(self.keywords)
 
     def set_keywords(self, keywords: list[str]):
-        self.keywords = json.dumps(keywords, ensure_ascii=False)
+        self.keywords = json.dumps(list(dict.fromkeys(keywords)), ensure_ascii=False)
 
     def get_exclude_keywords(self) -> list[str]:
         return json.loads(self.exclude_keywords)
 
     def set_exclude_keywords(self, keywords: list[str]):
-        self.exclude_keywords = json.dumps(keywords, ensure_ascii=False)
+        self.exclude_keywords = json.dumps(list(dict.fromkeys(keywords)), ensure_ascii=False)
 
     def get_employment_types(self) -> list[str]:
         return json.loads(self.employment_types)
