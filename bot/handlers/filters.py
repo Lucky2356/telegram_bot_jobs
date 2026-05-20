@@ -3,6 +3,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.exceptions import TelegramBadRequest
 from bot.keyboards import (
     FilterCallback, WizardAction,
     build_keywords_keyboard, build_exclude_keywords_keyboard,
@@ -16,6 +17,19 @@ from bot.keyboards import (
 from core.database.repository import Database
 
 router = Router()
+
+
+async def _safe_edit(msg, text=None, reply_markup=None, **kwargs):
+    try:
+        if text is not None:
+            await msg.edit_text(text=text, reply_markup=reply_markup, **kwargs)
+        elif reply_markup is not None:
+            await msg.edit_reply_markup(reply_markup=reply_markup)
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            pass
+        else:
+            raise
 
 
 class FilterWizard(StatesGroup):
@@ -74,8 +88,7 @@ async def on_noop(callback: CallbackQuery):
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.CANCEL))
 async def on_cancel(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    await callback.message.edit_text(
-        "❌ Создание фильтра отменено.",
+    await _safe_edit(callback.message, text="❌ Создание фильтра отменено.",
         reply_markup=build_start_keyboard(),
     )
     await callback.answer()
@@ -90,8 +103,7 @@ async def on_keyword_done(callback: CallbackQuery, state: FSMContext):
         return
     await state.set_state(FilterWizard.exclude_keywords)
     excluded = data.get("excluded_keywords", [])
-    await callback.message.edit_text(
-        "Выбери слова, которые нужно ИСКЛЮЧИТЬ\n\n"
+    await _safe_edit(callback.message, text="Выбери слова, которые нужно ИСКЛЮЧИТЬ\n\n"
         "Если хочешь исключить какие-то технологии или роли, отметь их.\n"
         "Если нет — просто нажми «Далее».",
         reply_markup=build_exclude_keywords_keyboard(excluded),
@@ -109,8 +121,7 @@ async def on_exclude_toggle(callback: CallbackQuery, state: FSMContext):
     else:
         excluded.append(kw)
     await state.update_data(excluded_keywords=excluded)
-    await callback.message.edit_reply_markup(
-        reply_markup=build_exclude_keywords_keyboard(excluded)
+    await _safe_edit(callback.message, reply_markup=build_exclude_keywords_keyboard(excluded)
     )
     await callback.answer()
 
@@ -120,8 +131,7 @@ async def on_exclude_done(callback: CallbackQuery, state: FSMContext):
     await state.set_state(FilterWizard.city)
     data = await state.get_data()
     city = data.get("city", None)
-    await callback.message.edit_text(
-        "Выбери город\n\n"
+    await _safe_edit(callback.message, text="Выбери город\n\n"
         "Если город не важен, нажми «Любой».",
         reply_markup=build_city_keyboard(city),
     )
@@ -135,8 +145,7 @@ async def on_city_select(callback: CallbackQuery, state: FSMContext):
         await on_city_done(callback, state)
         return
     await state.update_data(city=value if value != "any" else None)
-    await callback.message.edit_reply_markup(
-        reply_markup=build_city_keyboard(value)
+    await _safe_edit(callback.message, reply_markup=build_city_keyboard(value)
     )
     await callback.answer()
 
@@ -145,8 +154,7 @@ async def on_city_done(callback: CallbackQuery, state: FSMContext):
     await state.set_state(FilterWizard.experience)
     data = await state.get_data()
     exp = data.get("experience", None)
-    await callback.message.edit_text(
-        "Выбери требуемый опыт работы",
+    await _safe_edit(callback.message, text="Выбери требуемый опыт работы",
         reply_markup=build_experience_keyboard(exp),
     )
     await callback.answer()
@@ -162,15 +170,13 @@ async def on_experience_select(callback: CallbackQuery, state: FSMContext):
         data = await state.get_data()
         city = data.get("city", None)
         await state.set_state(FilterWizard.city)
-        await callback.message.edit_text(
-            "Выбери город",
+        await _safe_edit(callback.message, text=    "Выбери город",
             reply_markup=build_city_keyboard(city),
         )
         await callback.answer()
         return
     await state.update_data(experience=value)
-    await callback.message.edit_reply_markup(
-        reply_markup=build_experience_keyboard(value)
+    await _safe_edit(callback.message, reply_markup=build_experience_keyboard(value)
     )
     await callback.answer()
 
@@ -179,8 +185,7 @@ async def on_experience_done(callback: CallbackQuery, state: FSMContext):
     await state.set_state(FilterWizard.salary)
     data = await state.get_data()
     salary_key = data.get("salary_key", None)
-    await callback.message.edit_text(
-        "Выбери зарплату",
+    await _safe_edit(callback.message, text="Выбери зарплату",
         reply_markup=build_salary_keyboard(salary_key),
     )
     await callback.answer()
@@ -196,16 +201,14 @@ async def on_salary_select(callback: CallbackQuery, state: FSMContext):
         data = await state.get_data()
         exp = data.get("experience", None)
         await state.set_state(FilterWizard.experience)
-        await callback.message.edit_text(
-            "Выбери требуемый опыт работы",
+        await _safe_edit(callback.message, text=    "Выбери требуемый опыт работы",
             reply_markup=build_experience_keyboard(exp),
         )
         await callback.answer()
         return
     if value == "custom":
         await state.set_state(FilterWizard.custom_salary)
-        await callback.message.edit_text(
-            "Введи желаемую зарплату цифрой (например: 250000)\n"
+        await _safe_edit(callback.message, text=    "Введи желаемую зарплату цифрой (например: 250000)\n"
             "Или диапазон через дефис (например: 200000-350000)",
         )
         await callback.answer()
@@ -214,8 +217,7 @@ async def on_salary_select(callback: CallbackQuery, state: FSMContext):
         if key == value:
             await state.update_data(salary_key=value, salary_min=smin, salary_max=smax)
             break
-    await callback.message.edit_reply_markup(
-        reply_markup=build_salary_keyboard(value)
+    await _safe_edit(callback.message, reply_markup=build_salary_keyboard(value)
     )
     await callback.answer()
 
@@ -251,8 +253,7 @@ async def on_salary_done(callback: CallbackQuery, state: FSMContext):
     await state.set_state(FilterWizard.employment)
     data = await state.get_data()
     emp_types = data.get("employment_types", [])
-    await callback.message.edit_text(
-        "Выбери тип занятости\n\n"
+    await _safe_edit(callback.message, text="Выбери тип занятости\n\n"
         "Можно выбрать несколько вариантов.",
         reply_markup=build_employment_keyboard(emp_types),
     )
@@ -269,8 +270,7 @@ async def on_employment_toggle(callback: CallbackQuery, state: FSMContext):
     else:
         emp_types.append(value)
     await state.update_data(employment_types=emp_types)
-    await callback.message.edit_reply_markup(
-        reply_markup=build_employment_keyboard(emp_types)
+    await _safe_edit(callback.message, reply_markup=build_employment_keyboard(emp_types)
     )
     await callback.answer()
 
@@ -282,8 +282,7 @@ async def on_employment_done(callback: CallbackQuery, state: FSMContext):
         data = await state.get_data()
         salary_key = data.get("salary_key", None)
         await state.set_state(FilterWizard.salary)
-        await callback.message.edit_text(
-            "Выбери зарплату",
+        await _safe_edit(callback.message, text=    "Выбери зарплату",
             reply_markup=build_salary_keyboard(salary_key),
         )
         await callback.answer()
@@ -292,8 +291,7 @@ async def on_employment_done(callback: CallbackQuery, state: FSMContext):
     await state.set_state(FilterWizard.sites)
     data = await state.get_data()
     sites = data.get("sites", [])
-    await callback.message.edit_text(
-        "Выбери сайты для поиска\n\n"
+    await _safe_edit(callback.message, text="Выбери сайты для поиска\n\n"
         "Можно выбрать несколько.",
         reply_markup=build_sites_keyboard(sites),
     )
@@ -310,8 +308,7 @@ async def on_site_toggle(callback: CallbackQuery, state: FSMContext):
     else:
         sites.append(value)
     await state.update_data(sites=sites)
-    await callback.message.edit_reply_markup(
-        reply_markup=build_sites_keyboard(sites)
+    await _safe_edit(callback.message, reply_markup=build_sites_keyboard(sites)
     )
     await callback.answer()
 
@@ -323,8 +320,7 @@ async def on_site_done(callback: CallbackQuery, state: FSMContext):
         data = await state.get_data()
         emp_types = data.get("employment_types", [])
         await state.set_state(FilterWizard.employment)
-        await callback.message.edit_text(
-            "Выбери тип занятости",
+        await _safe_edit(callback.message, text=    "Выбери тип занятости",
             reply_markup=build_employment_keyboard(emp_types),
         )
         await callback.answer()
@@ -372,8 +368,7 @@ async def on_site_done(callback: CallbackQuery, state: FSMContext):
     site_labels = [SITES.get(s, s) for s in sites]
     lines.append(f"<b>Сайты:</b> {', '.join(site_labels)}")
 
-    await callback.message.edit_text(
-        "\n".join(lines) + "\n\nСоздать этот фильтр?",
+    await _safe_edit(callback.message, text="\n".join(lines) + "\n\nСоздать этот фильтр?",
         reply_markup=build_confirm_keyboard(),
         parse_mode="HTML",
     )
@@ -399,8 +394,7 @@ async def on_confirm(callback: CallbackQuery, state: FSMContext, db: Database):
         experience=data.get("experience"),
     )
     await state.clear()
-    await callback.message.edit_text(
-        f"✅ Фильтр «{vf.name}» создан!\n\n"
+    await _safe_edit(callback.message, text=f"✅ Фильтр «{vf.name}» создан!\n\n"
         f"Теперь я буду присылать подходящие вакансии раз в час.",
         reply_markup=build_start_keyboard(),
     )

@@ -1,4 +1,5 @@
 from aiogram import Router, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
@@ -7,6 +8,19 @@ from bot.handlers.filters import FilterWizard
 from core.database.repository import Database
 
 router = Router()
+
+
+async def _safe_edit(msg, text=None, reply_markup=None):
+    try:
+        if text is not None:
+            await msg.edit_text(text=text, reply_markup=reply_markup)
+        elif reply_markup is not None:
+            await msg.edit_reply_markup(reply_markup=reply_markup)
+    except TelegramBadRequest as e:
+        if 'message is not modified' in str(e):
+            pass
+        else:
+            raise
 
 
 @router.message(CommandStart())
@@ -32,14 +46,12 @@ async def main_filters(callback: CallbackQuery, db: Database):
     user = await db.get_or_create_user(callback.from_user.id)
     filters = await db.get_user_filters(user.id)
     if not filters:
-        await callback.message.edit_text(
-            "У тебя пока нет фильтров. Создай первый!",
+        await _safe_edit(callback.message, text="У тебя пока нет фильтров. Создай первый!",
             reply_markup=build_start_keyboard(),
         )
     else:
         from bot.keyboards import build_filters_list_keyboard
-        await callback.message.edit_text(
-            "📋 Твои фильтры вакансий:",
+        await _safe_edit(callback.message, text="📋 Твои фильтры вакансий:",
             reply_markup=build_filters_list_keyboard(filters),
         )
     await callback.answer()
@@ -59,8 +71,7 @@ async def main_add(callback: CallbackQuery, state: FSMContext):
         sites=[],
     )
     await state.set_state(FilterWizard.keywords)
-    await callback.message.edit_text(
-        "Шаг 1 — Выбери ключевые слова для поиска\n\n"
+    await _safe_edit(callback.message, text="Шаг 1 — Выбери ключевые слова для поиска\n\n"
         "Нажимай на слова, чтобы добавить их в фильтр.\n"
         "Можно выбрать несколько из разных групп.",
         reply_markup=build_keywords_keyboard([]),

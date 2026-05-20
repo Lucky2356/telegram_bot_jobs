@@ -1,5 +1,6 @@
 import asyncio
 from aiogram import Router, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
 from bot.keyboards import (
@@ -11,6 +12,19 @@ from core.database.repository import Database
 from core.scheduler import Scheduler
 
 router = Router()
+
+
+async def _safe_edit(msg, text=None, reply_markup=None):
+    try:
+        if text is not None:
+            await msg.edit_text(text=text, reply_markup=reply_markup)
+        elif reply_markup is not None:
+            await msg.edit_reply_markup(reply_markup=reply_markup)
+    except TelegramBadRequest as e:
+        if 'message is not modified' in str(e):
+            pass
+        else:
+            raise
 
 
 @router.message(Command("filters"))
@@ -34,7 +48,7 @@ async def on_filter_toggle(callback: CallbackQuery, db: Database):
     active = await db.toggle_filter(filter_id)
     user = await db.get_or_create_user(callback.from_user.id)
     filters = await db.get_user_filters(user.id)
-    await callback.message.edit_reply_markup(
+    await _safe_edit(callback.message,
         reply_markup=build_filters_list_keyboard(filters)
     )
     status = "🟢 активен" if active else "🔴 на паузе"
@@ -48,12 +62,10 @@ async def on_filter_delete(callback: CallbackQuery, db: Database):
     user = await db.get_or_create_user(callback.from_user.id)
     filters = await db.get_user_filters(user.id)
     if filters:
-        await callback.message.edit_reply_markup(
-            reply_markup=build_filters_list_keyboard(filters)
+        await _safe_edit(callback.message, reply_markup=build_filters_list_keyboard(filters)
         )
     else:
-        await callback.message.edit_text(
-            "Фильтр удалён. У тебя больше нет фильтров.",
+        await _safe_edit(callback.message, text="Фильтр удалён. У тебя больше нет фильтров.",
             reply_markup=build_start_keyboard(),
         )
     await callback.answer("Фильтр удалён 🗑")
@@ -88,8 +100,7 @@ async def on_filter_view(callback: CallbackQuery, db: Database):
         lines.append(f"<b>Опыт:</b> {EXPERIENCE.get(vf.experience, vf.experience)}")
     site_labels = [SITES.get(s, s) for s in vf.get_sites()]
     lines.append(f"<b>Сайты:</b> {', '.join(site_labels)}")
-    await callback.message.edit_text(
-        "\n".join(lines),
+    await _safe_edit(callback.message, text="\n".join(lines),
         reply_markup=build_filter_detail_keyboard(vf.id, vf.active),
         parse_mode="HTML",
     )
@@ -117,8 +128,7 @@ async def on_filter_clone(callback: CallbackQuery, db: Database):
     )
     user = await db.get_or_create_user(callback.from_user.id)
     filters = await db.get_user_filters(user.id)
-    await callback.message.edit_text(
-        f"✅ Фильтр «{new_vf.name}» создан из копии «{vf.name}»",
+    await _safe_edit(callback.message, text=f"✅ Фильтр «{new_vf.name}» создан из копии «{vf.name}»",
         reply_markup=build_filters_list_keyboard(filters),
     )
     await callback.answer()
@@ -225,7 +235,7 @@ async def cmd_resume(message: Message, db: Database):
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.CHECK_NOW))
 async def on_check_now(callback: CallbackQuery, scheduler: Scheduler):
-    await callback.message.edit_text("🔍 Проверяю вакансии...")
+    await _safe_edit(callback.message, text="🔍 Проверяю вакансии...")
     if scheduler:
         asyncio.create_task(scheduler.run_check())
         await callback.message.answer(
