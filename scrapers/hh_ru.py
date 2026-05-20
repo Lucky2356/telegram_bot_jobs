@@ -19,7 +19,10 @@ CITY_IDS: dict[str, int] = {
 
 class HHScraper(BaseScraper):
     def __init__(self):
-        self.client = httpx.AsyncClient(timeout=30.0, trust_env=False)
+        self.client = httpx.AsyncClient(
+            timeout=30.0, trust_env=False,
+            headers={"User-Agent": "TelegramJobBot/1.0 (job-bot)"},
+        )
 
     async def close(self):
         await self.client.aclose()

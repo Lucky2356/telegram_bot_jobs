@@ -4,7 +4,7 @@ from scrapers.base import BaseScraper, VacancyData
 from core.config import settings
 
 
-SJ_API = "https://api.superjob.ru/2.0/vacancies"
+SJ_API = "https://api.superjob.ru/2.0/vacancies/"
 SJ_HEADERS = {"X-Api-App-Id": settings.SUPERJOB_API_KEY}
 
 

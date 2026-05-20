@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup, Tag
 from scrapers.base import BaseScraper, VacancyData
 
 
-RABOTA_URL = "https://rabota.ru/search"
+RABOTA_URL = "https://www.rabota.ru/vacancy/search"
 
 
 class RabotaRuScraper(BaseScraper):
