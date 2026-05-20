@@ -18,9 +18,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
         filters = await db.get_all_active_filters()
         history = await db.get_recent_sent(limit=30)
         return templates.TemplateResponse(
-            "index.html",
+            request, "index.html",
             {
-                "request": request,
                 "filters": filters,
                 "history": history,
                 "employment_types": EMPLOYMENT_TYPES,
