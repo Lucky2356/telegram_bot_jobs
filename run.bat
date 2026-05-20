@@ -2,25 +2,22 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 set "PATH=C:\Program Files\Python312;C:\Program Files\Python312\Scripts;%PATH%"
+set PYTHONIOENCODING=utf-8
 
 echo =============================
-echo Job Bot Startup
+echo  Job Bot
 echo =============================
-echo Python path:
-where python
-echo.
+echo [OK] Python: 
 python --version
-if %errorlevel% neq 0 (
-    echo [ERROR] Python not found! Check C:\Program Files\Python312\
-    pause
-    exit /b 1
-)
-echo.
-echo Deleting old database (schema refresh)...
+
 del /q vacancies.db 2>nul
 del /q vacancies.db-journal 2>nul
-echo.
-echo Starting...
-set PYTHONIOENCODING=utf-8
+echo [OK] Database cleaned
+
+echo [OK] Starting bot...
+echo =============================
+echo  Bot is running. Open http://127.0.0.1:8000
+echo  Press Ctrl+C to stop
+echo =============================
 python -u main.py
 pause

@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import logging
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
@@ -10,11 +11,17 @@ from core.scheduler import Scheduler
 from bot.dispatcher import setup_dispatcher
 from web.app import run_web
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    stream=sys.stdout,
+)
 logger = logging.getLogger(__name__)
 
 
 async def main():
+    sys.stdout.reconfigure(encoding="utf-8")
+    print("=== Job Bot Starting ===", flush=True)
     db = Database(settings.DATABASE_URL)
     await db.create_tables()
     logger.info("Database initialized")
@@ -48,3 +55,10 @@ async def main():
         await scheduler_obj.close()
         aps.shutdown(wait=False)
         await bot.session.close()
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
