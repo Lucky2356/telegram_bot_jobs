@@ -79,7 +79,10 @@ class TrudvsemScraper(BaseScraper):
                         except Exception:
                             pass
 
-                    desc_parts = filter(None, [v.get("duty", ""), v.get("requirements", "")])
+                    desc_parts = filter(None, [
+                        v.get("duty", ""), v.get("requirements", ""),
+                        v.get("qualification", ""), v.get("skills", ""),
+                    ])
                     desc = " ".join(desc_parts).replace("\n", " ").strip()
                     vac_url = v.get("vac-url", "")
 

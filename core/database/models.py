@@ -39,13 +39,13 @@ class VacancyFilter(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     def get_keywords(self) -> list[str]:
-        return json.loads(self.keywords)
+        return list(dict.fromkeys(json.loads(self.keywords)))
 
     def set_keywords(self, keywords: list[str]):
         self.keywords = json.dumps(list(dict.fromkeys(keywords)), ensure_ascii=False)
 
     def get_exclude_keywords(self) -> list[str]:
-        return json.loads(self.exclude_keywords)
+        return list(dict.fromkeys(json.loads(self.exclude_keywords)))
 
     def set_exclude_keywords(self, keywords: list[str]):
         self.exclude_keywords = json.dumps(list(dict.fromkeys(keywords)), ensure_ascii=False)
