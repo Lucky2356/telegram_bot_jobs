@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from core.database.models import Base, User, VacancyFilter, Vacancy, SentVacancy, SavedVacancy, Blocklist
@@ -222,7 +222,7 @@ class Database:
                 session.add(SavedVacancy(user_id=user_id, vacancy_id=vacancy_id))
                 await session.commit()
 
-    async def get_recent_sent(self, limit: int = 20) -> list[tuple[SentVacancy, Vacancy, User]]:
+    async def get_recent_sent(self, limit: int = 20) -> list[tuple[SentVacancy, Vacancy, User, VacancyFilter | None]]:
         async with self.session_factory() as session:
             stmt = (
                 select(SentVacancy, Vacancy, User, VacancyFilter)

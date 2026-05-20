@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, BigInteger, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -14,7 +14,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
     username: Mapped[str | None] = mapped_column(String(255))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
 
 
 class VacancyFilter(Base):
@@ -32,7 +32,7 @@ class VacancyFilter(Base):
     exclude_keywords: Mapped[str] = mapped_column(Text, default="[]")
     experience: Mapped[str | None] = mapped_column(String(10))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
 
     def get_keywords(self) -> list[str]:
         return json.loads(self.keywords)
@@ -74,7 +74,7 @@ class Vacancy(Base):
     description: Mapped[str | None] = mapped_column(Text)
     url: Mapped[str] = mapped_column(String(1000))
     published_at: Mapped[datetime | None] = mapped_column(DateTime)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint("source", "source_id", name="uq_source_vacancy"),
@@ -88,7 +88,7 @@ class SentVacancy(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     vacancy_id: Mapped[int] = mapped_column(ForeignKey("vacancies.id"), nullable=False)
     filter_id: Mapped[int | None] = mapped_column(ForeignKey("filters.id"))
-    sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
 
 
 class SavedVacancy(Base):
@@ -97,7 +97,7 @@ class SavedVacancy(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     vacancy_id: Mapped[int] = mapped_column(ForeignKey("vacancies.id"), nullable=False)
-    saved_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    saved_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
 
 
 class Blocklist(Base):

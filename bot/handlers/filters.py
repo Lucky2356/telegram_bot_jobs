@@ -45,7 +45,7 @@ async def cmd_add_filter(message: Message, state: FSMContext):
     )
     await state.set_state(FilterWizard.keywords)
     await message.answer(
-        "Шаг 1 — Выбери ключевые слова для поиска\n\n"
+        "Выбери ключевые слова для поиска\n\n"
         "Нажимай на слова, чтобы добавить их в фильтр.\n"
         "Можно выбрать несколько из разных групп.",
         reply_markup=build_keywords_keyboard([]),
@@ -91,7 +91,7 @@ async def on_keyword_done(callback: CallbackQuery, state: FSMContext):
     await state.set_state(FilterWizard.exclude_keywords)
     excluded = data.get("excluded_keywords", [])
     await callback.message.edit_text(
-        "Шаг 2 — Выбери слова, которые нужно ИСКЛЮЧИТЬ\n\n"
+        "Выбери слова, которые нужно ИСКЛЮЧИТЬ\n\n"
         "Если хочешь исключить какие-то технологии или роли, отметь их.\n"
         "Если нет — просто нажми «Далее».",
         reply_markup=build_exclude_keywords_keyboard(excluded),
@@ -121,7 +121,7 @@ async def on_exclude_done(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     city = data.get("city", None)
     await callback.message.edit_text(
-        "Шаг 3 — Выбери город\n\n"
+        "Выбери город\n\n"
         "Если город не важен, нажми «Любой».",
         reply_markup=build_city_keyboard(city),
     )
@@ -146,7 +146,7 @@ async def on_city_done(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     exp = data.get("experience", None)
     await callback.message.edit_text(
-        "Шаг 4 — Выбери требуемый опыт работы",
+        "Выбери требуемый опыт работы",
         reply_markup=build_experience_keyboard(exp),
     )
     await callback.answer()
@@ -163,7 +163,7 @@ async def on_experience_select(callback: CallbackQuery, state: FSMContext):
         city = data.get("city", None)
         await state.set_state(FilterWizard.city)
         await callback.message.edit_text(
-            "Шаг 3 — Выбери город",
+            "Выбери город",
             reply_markup=build_city_keyboard(city),
         )
         await callback.answer()
@@ -180,7 +180,7 @@ async def on_experience_done(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     salary_key = data.get("salary_key", None)
     await callback.message.edit_text(
-        "Шаг 5 — Выбери зарплату",
+        "Выбери зарплату",
         reply_markup=build_salary_keyboard(salary_key),
     )
     await callback.answer()
@@ -197,7 +197,7 @@ async def on_salary_select(callback: CallbackQuery, state: FSMContext):
         exp = data.get("experience", None)
         await state.set_state(FilterWizard.experience)
         await callback.message.edit_text(
-            "Шаг 4 — Выбери требуемый опыт работы",
+            "Выбери требуемый опыт работы",
             reply_markup=build_experience_keyboard(exp),
         )
         await callback.answer()
@@ -241,7 +241,7 @@ async def on_custom_salary(message: Message, state: FSMContext):
     data = await state.get_data()
     emp_types = data.get("employment_types", [])
     await message.answer(
-        "Шаг 6 — Выбери тип занятости\n\n"
+        "Выбери тип занятости\n\n"
         "Можно выбрать несколько вариантов.",
         reply_markup=build_employment_keyboard(emp_types),
     )
@@ -252,7 +252,7 @@ async def on_salary_done(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     emp_types = data.get("employment_types", [])
     await callback.message.edit_text(
-        "Шаг 5 — Выбери тип занятости\n\n"
+        "Выбери тип занятости\n\n"
         "Можно выбрать несколько вариантов.",
         reply_markup=build_employment_keyboard(emp_types),
     )
@@ -280,11 +280,11 @@ async def on_employment_done(callback: CallbackQuery, state: FSMContext):
     value = FilterCallback.unpack(callback.data).value
     if value == "__back__":
         data = await state.get_data()
-        exp = data.get("experience", None)
-        await state.set_state(FilterWizard.experience)
+        salary_key = data.get("salary_key", None)
+        await state.set_state(FilterWizard.salary)
         await callback.message.edit_text(
-            "Шаг 4 — Выбери требуемый опыт работы",
-            reply_markup=build_experience_keyboard(exp),
+            "Выбери зарплату",
+            reply_markup=build_salary_keyboard(salary_key),
         )
         await callback.answer()
         return
@@ -293,7 +293,7 @@ async def on_employment_done(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     sites = data.get("sites", [])
     await callback.message.edit_text(
-        "Шаг 6 — Выбери сайты для поиска\n\n"
+        "Выбери сайты для поиска\n\n"
         "Можно выбрать несколько.",
         reply_markup=build_sites_keyboard(sites),
     )
@@ -324,7 +324,7 @@ async def on_site_done(callback: CallbackQuery, state: FSMContext):
         emp_types = data.get("employment_types", [])
         await state.set_state(FilterWizard.employment)
         await callback.message.edit_text(
-            "Шаг 5 — Выбери тип занятости",
+            "Выбери тип занятости",
             reply_markup=build_employment_keyboard(emp_types),
         )
         await callback.answer()
