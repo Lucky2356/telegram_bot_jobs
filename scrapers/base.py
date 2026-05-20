@@ -10,6 +10,8 @@ class VacancyData:
     title: str
     company: str | None = None
     salary_text: str | None = None
+    salary_min: int | None = None
+    salary_max: int | None = None
     employment_type: str | None = None
     experience: str | None = None
     city: str | None = None

@@ -92,12 +92,20 @@ class TrudvsemScraper(BaseScraper):
 
                 vac_url = v.get("vac-url", "")
 
+                try:
+                    sal_min_val = int(smin) if smin else None
+                    sal_max_val = int(smax) if smax else None
+                except (ValueError, TypeError):
+                    sal_min_val = None
+                    sal_max_val = None
                 results.append(VacancyData(
                     source="trudvsem",
                     source_id=v.get("id", vac_url or ""),
                     title=v.get("job-name", ""),
                     company=company_name,
                     salary_text=salary_text,
+                    salary_min=sal_min_val,
+                    salary_max=sal_max_val,
                     employment_type=emp_type,
                     city=city_name,
                     description=desc,

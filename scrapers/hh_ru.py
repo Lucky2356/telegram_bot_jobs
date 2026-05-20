@@ -85,13 +85,17 @@ class HHScraper(BaseScraper):
         results: list[VacancyData] = []
         for item in data.get("items", []):
             salary_text = None
+            salary_min = None
+            salary_max = None
             salary = item.get("salary")
             if salary:
+                salary_min = salary.get("from")
+                salary_max = salary.get("to")
                 parts = []
-                if salary.get("from"):
-                    parts.append(f"от {salary['from']:,}".replace(",", " "))
-                if salary.get("to"):
-                    parts.append(f"до {salary['to']:,}".replace(",", " "))
+                if salary_min:
+                    parts.append(f"от {salary_min:,}".replace(",", " "))
+                if salary_max:
+                    parts.append(f"до {salary_max:,}".replace(",", " "))
                 cur = salary.get("currency", "").upper()
                 if parts:
                     salary_text = " ".join(parts) + f" {cur}"
@@ -146,6 +150,8 @@ class HHScraper(BaseScraper):
                 title=item.get("name", ""),
                 company=item.get("employer", {}).get("name") if item.get("employer") else None,
                 salary_text=salary_text,
+                salary_min=salary_min,
+                salary_max=salary_max,
                 employment_type=emp_type,
                 experience=exp,
                 city=city_name,

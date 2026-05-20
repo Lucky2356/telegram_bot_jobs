@@ -18,6 +18,15 @@ class FilterUpdate(BaseModel):
     salary_max: int | None = None
     employment_types: list[str]
     sites: list[str]
+    experience: str | None = None
+    exclude_keywords: list[str] = []
+
+
+async def _get_first_user(db: Database):
+    from sqlalchemy import select as sa_select
+    from core.database.models import User as UserModel
+    async with db.session_factory() as session:
+        return (await session.execute(sa_select(UserModel))).scalar_one_or_none()
 
 
 def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
@@ -43,12 +52,9 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.post("/api/filters")
     async def api_create_filter(data: FilterUpdate):
-        from sqlalchemy import select as sa_select
-        from core.database.models import User as UserModel
-        async with db.session_factory() as session:
-            first_user = (await session.execute(sa_select(UserModel))).scalar_one_or_none()
+        user = await _get_first_user(db)
         vf = await db.create_filter(
-            user_id=first_user.id if first_user else 1,
+            user_id=user.id if user else 1,
             name=data.name,
             keywords=data.keywords,
             city=data.city,
@@ -56,6 +62,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             salary_max=data.salary_max,
             employment_types=data.employment_types,
             sites=data.sites,
+            exclude_keywords=data.exclude_keywords,
+            experience=data.experience,
         )
         return {"ok": True, "filter": {
             "id": vf.id,
@@ -115,6 +123,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             salary_max=data.salary_max,
             employment_types=data.employment_types,
             sites=data.sites,
+            exclude_keywords=data.exclude_keywords,
+            experience=data.experience,
         )
         if vf is None:
             return {"ok": False, "message": "Filter not found"}, 404

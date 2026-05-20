@@ -9,7 +9,7 @@ from scrapers.rabota_ru import RabotaRuScraper
 from scrapers.habr_career import HabrCareerScraper
 from scrapers.base import VacancyData, BaseScraper
 from bot.messages import format_vacancy_card
-from bot.keyboards import build_vacancy_actions_keyboard
+from bot.keyboards import build_vacancy_actions_keyboard, CITIES
 
 logger = logging.getLogger(__name__)
 
@@ -115,10 +115,17 @@ class Scheduler:
             return
         if emp_types and vac_data.employment_type and vac_data.employment_type not in emp_types:
             return
-        if vf.city and vac_data.city and vf.city.lower() not in vac_data.city.lower():
-            return
+        if vf.city:
+            city_label = CITIES.get(vf.city, vf.city).lower()
+            if vac_data.city and city_label not in vac_data.city.lower():
+                return
         if experience and vac_data.experience and vac_data.experience != experience:
             return
+        if vf.salary_min is not None or vf.salary_max is not None:
+            if vf.salary_min is not None and vac_data.salary_max is not None and vac_data.salary_max < vf.salary_min:
+                return
+            if vf.salary_max is not None and vac_data.salary_min is not None and vac_data.salary_min > vf.salary_max:
+                return
 
         vac = await self.db.add_vacancy(vac_data)
         if vac is None:
