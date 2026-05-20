@@ -1,7 +1,6 @@
 import httpx
-import re
 from datetime import datetime
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
 from scrapers.base import BaseScraper, VacancyData
 
 
@@ -15,13 +14,11 @@ class RabotaRuScraper(BaseScraper):
     async def close(self):
         await self.client.aclose()
 
-    async def search(
-        self, keywords: list[str], city: str | None = None
-    ) -> list[VacancyData]:
+    async def search(self, keywords: list[str], city: str | None = None) -> list[VacancyData]:
         query = " ".join(keywords)
         results: list[VacancyData] = []
         seen: set = set()
-        for page in range(3):
+        for page in range(1):
             params: dict = {"query": query}
             if city:
                 params["city"] = city
@@ -42,32 +39,28 @@ class RabotaRuScraper(BaseScraper):
         results: list[VacancyData] = []
         soup = BeautifulSoup(html, "lxml")
 
-        cards = (
-            soup.select("div.vacancy-preview-card")
-            or soup.select("[data-qa*='vacancy']")
-            or soup.select("article")
-            or soup.select("div[class*=card][class*=vacancy]")
-            or soup.select("div[class*=item][class*=vacancy]")
-        )
-        if not cards:
-            cards = soup.find_all("div", class_=re.compile(r"(vacancy|card|item)", re.I))
+        # Find all vacancy links with numeric IDs
+        for link_tag in soup.find_all("a", href=True):
+            href = link_tag.get("href", "")
+            # Only accept links like /vacancy/123456/ or similar
+            m = re.search(r"/vacancy/(\d+)", href)
+            if not m:
+                continue
+            vacancy_id = m.group(1)
+            if vacancy_id in {v.source_id for v in results}:
+                continue
 
-        for card in cards:
-            try:
-                link_tag = (
-                    card.select_one("a[href*='/vacancy']")
-                    or card.select_one("a[href*='/vakansiya']")
-                    or card.find("a", href=True)
-                )
-                if not link_tag:
-                    continue
-                href = link_tag.get("href", "")
-                if not href.startswith("http"):
-                    href = "https://rabota.ru" + href
+            if not href.startswith("http"):
+                href = "https://rabota.ru" + href
 
-                source_id = href.split("/")[-1] or href
-                title = link_tag.get_text(strip=True) or ""
-                company = None
+            title = link_tag.get_text(strip=True) or link_tag.get("title", "")
+            if not title:
+                continue
+
+            # Try to get company from nearby elements
+            card = link_tag.find_parent(["div", "article"])
+            company = None
+            if card:
                 for sel in [
                     "span[class*=company]", "div[class*=company]",
                     "a[class*=company]", "[data-qa*=company]",
@@ -78,7 +71,8 @@ class RabotaRuScraper(BaseScraper):
                         company = el.get_text(strip=True)
                         break
 
-                salary_text = None
+            salary_text = None
+            if card:
                 for sel in [
                     "div[class*=salary]", "span[class*=salary]",
                     "div[class*=price]", "[data-qa*=salary]",
@@ -88,7 +82,8 @@ class RabotaRuScraper(BaseScraper):
                         salary_text = el.get_text(strip=True)
                         break
 
-                city_name = None
+            city_name = None
+            if card:
                 for sel in [
                     "span[class*=city]", "span[class*=metro]",
                     "div[class*=location]", "[data-qa*=city]",
@@ -98,26 +93,20 @@ class RabotaRuScraper(BaseScraper):
                         city_name = el.get_text(strip=True)
                         break
 
+            emp_type = None
+            if card:
                 emp_type = self._detect_employment_type(card.get_text(" "))
 
-                desc = None
-                desc_el = card.select_one("div[class*=description], p[class*=desc], [data-qa*=snippet]")
-                if desc_el:
-                    desc = desc_el.get_text(strip=True)
-
-                results.append(VacancyData(
-                    source="rabota",
-                    source_id=source_id,
-                    title=title,
-                    company=company,
-                    salary_text=salary_text,
-                    employment_type=emp_type,
-                    city=city_name,
-                    description=desc,
-                    url=href,
-                ))
-            except Exception:
-                continue
+            results.append(VacancyData(
+                source="rabota",
+                source_id=vacancy_id,
+                title=title,
+                company=company,
+                salary_text=salary_text,
+                employment_type=emp_type,
+                city=city_name,
+                url=href,
+            ))
 
         return results
 

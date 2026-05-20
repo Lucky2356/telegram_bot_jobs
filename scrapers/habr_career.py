@@ -50,11 +50,7 @@ class HabrCareerScraper(BaseScraper):
 
         for card in cards:
             try:
-                link_tag = (
-                    card.select_one("a.vacancy-card__title-link")
-                    or card.select_one("a[href*='/vacancies/']")
-                    or card.find("a", href=True)
-                )
+                link_tag = card.select_one("a[href*='/vacancies/']") or card.find("a", href=True)
                 if not link_tag:
                     continue
                 href = link_tag.get("href", "")
@@ -62,11 +58,18 @@ class HabrCareerScraper(BaseScraper):
                     href = "https://career.habr.com" + href
 
                 source_id = href.split("/")[-1] or href.split("/")[-2] if href else href
-                title = link_tag.get_text(strip=True)
+
+                title = ""
+                title_el = card.select_one("[class*=title]")
+                if title_el:
+                    title = title_el.get_text(strip=True)
+                if not title:
+                    title = link_tag.get_text(strip=True) or card.get_text(strip=True)[:80]
 
                 company = None
                 for sel in [
                     "div.vacancy-card__company-title",
+                    "a.vacancy-card__company-link",
                     "a[class*=company]",
                     "div[class*=company]",
                 ]:
@@ -80,6 +83,7 @@ class HabrCareerScraper(BaseScraper):
                     "div.vacancy-card__price",
                     "span[class*=salary]",
                     "div[class*=salary]",
+                    "[class*=price]",
                 ]:
                     el = card.select_one(sel)
                     if el:
