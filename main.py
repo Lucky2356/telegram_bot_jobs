@@ -38,14 +38,13 @@ async def main():
     logger.info("Scheduler started (every %d hours)", settings.CHECK_INTERVAL_HOURS)
 
     logger.info("Starting Telegram bot polling...")
-    await asyncio.gather(
-        dp.start_polling(bot),
-        run_web(db, scheduler_obj),
-    )
-
-
-if __name__ == "__main__":
     try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
+        await asyncio.gather(
+            dp.start_polling(bot),
+            run_web(db, scheduler_obj),
+        )
+    finally:
         logger.info("Shutting down...")
+        await scheduler_obj.close()
+        aps.shutdown(wait=False)
+        await bot.session.close()

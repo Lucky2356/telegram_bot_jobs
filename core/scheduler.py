@@ -1,5 +1,5 @@
 import logging
-import re
+import asyncio
 from aiogram import Bot
 from core.database.repository import Database
 from scrapers.hh_ru import HHScraper
@@ -14,12 +14,16 @@ from bot.keyboards import build_vacancy_actions_keyboard, CITIES
 logger = logging.getLogger(__name__)
 
 
+MAX_DIGEST_LENGTH = 3500
+
+
 class Scheduler:
     def __init__(self, db: Database, bot: Bot):
         self.db = db
         self.bot = bot
         self._scrapers: dict[str, BaseScraper] = {}
         self._user_buffers: dict[int, list[str]] = {}
+        self._lock = asyncio.Lock()
 
     def _get_scraper(self, site: str) -> BaseScraper | None:
         if site not in self._scrapers:
@@ -44,34 +48,41 @@ class Scheduler:
         self._scrapers.clear()
 
     async def run_check(self):
-        logger.info("Starting vacancy check...")
-        self._user_buffers.clear()
-        filters = await self.db.get_all_active_filters()
-        if not filters:
-            logger.info("No active filters, skipping check.")
+        if self._lock.locked():
+            logger.info("Check already running, skipping.")
             return
+        async with self._lock:
+            logger.info("Starting vacancy check...")
+            self._user_buffers.clear()
+            filters = await self.db.get_all_active_filters()
+            if not filters:
+                logger.info("No active filters, skipping check.")
+                return
 
-        for vf in filters:
-            await self._check_filter(vf)
+            for vf in filters:
+                await self._check_filter(vf)
 
-        for user_id, vacancies in self._user_buffers.items():
-            if not vacancies:
-                continue
-            header = f"🔍 <b>Найдено {len(vacancies)} новых вакансий</b>\n\n"
-            body = "\n\n".join(vacancies)
-            try:
-                user = await self.db.get_user(user_id)
-                if user:
-                    await self.bot.send_message(
-                        chat_id=user.telegram_id,
-                        text=header + body,
-                        disable_web_page_preview=True,
-                    )
-            except Exception as e:
-                logger.warning("Failed to send digest: %s", e)
+            for user_id, vacancies in self._user_buffers.items():
+                if not vacancies:
+                    continue
+                header = f"🔍 <b>Найдено {len(vacancies)} новых вакансий</b>\n\n"
+                body = "\n\n".join(vacancies)
+                try:
+                    user = await self.db.get_user(user_id)
+                    if user:
+                        full_text = header + body
+                        for i in range(0, len(full_text), MAX_DIGEST_LENGTH):
+                            chunk = full_text[i:i + MAX_DIGEST_LENGTH]
+                            await self.bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=chunk,
+                                disable_web_page_preview=True,
+                            )
+                except Exception as e:
+                    logger.warning("Failed to send digest: %s", e)
 
-        self._user_buffers.clear()
-        logger.info("Vacancy check completed.")
+            self._user_buffers.clear()
+            logger.info("Vacancy check completed.")
 
     async def _check_filter(self, vf):
         user = await self.db.get_user(vf.user_id)

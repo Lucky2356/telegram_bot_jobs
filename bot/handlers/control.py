@@ -136,6 +136,47 @@ async def cmd_pause(message: Message, db: Database):
     await message.answer(f"⏸ {count} фильтров поставлено на паузу.")
 
 
+@router.message(Command("saved"))
+async def cmd_saved(message: Message, db: Database):
+    user = await db.get_or_create_user(message.from_user.id)
+    from core.database.models import SavedVacancy, Vacancy
+    from sqlalchemy import select
+    async with db.session_factory() as session:
+        result = await session.execute(
+            select(Vacancy).join(SavedVacancy, SavedVacancy.vacancy_id == Vacancy.id)
+            .where(SavedVacancy.user_id == user.id)
+            .order_by(SavedVacancy.saved_at.desc())
+            .limit(20)
+        )
+        saved_vacs = result.scalars().all()
+    if not saved_vacs:
+        await message.answer("У тебя пока нет сохранённых вакансий.")
+        return
+    lines = ["📌 <b>Сохранённые вакансии:</b>\n"]
+    for v in saved_vacs:
+        lines.append(f"💼 {v.title}\n🏢 {v.company or '—'} | 🔗 {v.url}\n")
+    await message.answer("\n".join(lines), parse_mode="HTML", disable_web_page_preview=True)
+
+
+@router.message(Command("blocklist"))
+async def cmd_blocklist(message: Message, db: Database):
+    user = await db.get_or_create_user(message.from_user.id)
+    from sqlalchemy import select
+    from core.database.models import Blocklist
+    async with db.session_factory() as session:
+        result = await session.execute(
+            select(Blocklist).where(Blocklist.user_id == user.id)
+        )
+        blocks = result.scalars().all()
+    if not blocks:
+        await message.answer("Блок-лист пуст. Ничего не заблокировано.")
+        return
+    lines = ["🚫 <b>Блок-лист компаний:</b>"]
+    for b in blocks:
+        lines.append(f"• {b.pattern} ({b.type})")
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
 @router.message(Command("stats"))
 async def cmd_stats(message: Message, db: Database):
     user = await db.get_or_create_user(message.from_user.id)
