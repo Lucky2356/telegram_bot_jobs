@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from core.database.models import Base, User, VacancyFilter, Vacancy, SentVacancy
+from core.database.models import Base, User, VacancyFilter, Vacancy, SentVacancy, SavedVacancy, Blocklist
 from scrapers.base import VacancyData
 
 
@@ -176,6 +176,45 @@ class Database:
         async with self.session_factory() as session:
             result = await session.execute(select(func.count(VacancyFilter.id)))
             return result.scalar()
+
+    async def add_blocklist(self, user_id: int, pattern: str, type: str = "company"):
+        async with self.session_factory() as session:
+            exists = await session.execute(
+                select(Blocklist).where(
+                    Blocklist.user_id == user_id,
+                    Blocklist.pattern == pattern,
+                    Blocklist.type == type,
+                )
+            )
+            if exists.scalar_one_or_none() is None:
+                session.add(Blocklist(user_id=user_id, pattern=pattern, type=type))
+                await session.commit()
+
+    async def is_blocked(self, user_id: int, company: str | None, title: str) -> bool:
+        if not company:
+            return False
+        async with self.session_factory() as session:
+            blocks = await session.execute(
+                select(Blocklist).where(Blocklist.user_id == user_id)
+            )
+            for b in blocks.scalars().all():
+                if b.pattern.lower() in (company or "").lower():
+                    return True
+                if b.pattern.lower() in title.lower():
+                    return True
+        return False
+
+    async def save_vacancy(self, user_id: int, vacancy_id: int):
+        async with self.session_factory() as session:
+            exists = await session.execute(
+                select(SavedVacancy).where(
+                    SavedVacancy.user_id == user_id,
+                    SavedVacancy.vacancy_id == vacancy_id,
+                )
+            )
+            if exists.scalar_one_or_none() is None:
+                session.add(SavedVacancy(user_id=user_id, vacancy_id=vacancy_id))
+                await session.commit()
 
     async def get_recent_sent(self, limit: int = 20) -> list[tuple[SentVacancy, Vacancy, User]]:
         async with self.session_factory() as session:

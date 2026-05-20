@@ -24,6 +24,9 @@ class WizardAction(StrEnum):
     CHECK_NOW = "check_now"
     MAIN_FILTERS = "main_filters"
     MAIN_ADD = "main_add"
+    VAC_SAVE = "v_save"
+    VAC_BLOCK = "v_block"
+    VAC_SIMILAR = "v_similar"
 
 
 class FilterCallback(CallbackData, prefix="fw"):
@@ -239,6 +242,21 @@ def build_filters_list_keyboard(filters: list) -> InlineKeyboardMarkup:
         )
     builder.row(_btn("➕ Добавить фильтр", WizardAction.MAIN_ADD))
     builder.row(_btn("🔍 Проверить сейчас", WizardAction.CHECK_NOW))
+    return builder.as_markup()
+
+
+def build_vacancy_actions_keyboard(
+    vacancy_id: int, source: str, url: str,
+) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="🔗 Открыть", url=url),
+    )
+    builder.row(
+        _btn("📌 Отложить", WizardAction.VAC_SAVE, str(vacancy_id)),
+        _btn("🚫 Не интересует", WizardAction.VAC_BLOCK, f"{vacancy_id}:{source}"),
+        _btn("🔍 Похожие", WizardAction.VAC_SIMILAR, str(vacancy_id)),
+    )
     return builder.as_markup()
 
 

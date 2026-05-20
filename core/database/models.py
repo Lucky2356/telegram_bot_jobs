@@ -86,3 +86,21 @@ class SentVacancy(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     vacancy_id: Mapped[int] = mapped_column(ForeignKey("vacancies.id"), nullable=False)
     sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SavedVacancy(Base):
+    __tablename__ = "saved_vacancies"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    vacancy_id: Mapped[int] = mapped_column(ForeignKey("vacancies.id"), nullable=False)
+    saved_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Blocklist(Base):
+    __tablename__ = "blocklist"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    pattern: Mapped[str] = mapped_column(String(500), nullable=False)
+    type: Mapped[str] = mapped_column(String(20), nullable=False)  # "company" or "keyword"

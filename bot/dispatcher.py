@@ -8,6 +8,7 @@ def setup_dispatcher(db: Database, scheduler: Scheduler | None = None) -> Dispat
     from bot.handlers.start import router as start_router
     from bot.handlers.filters import router as filters_router
     from bot.handlers.control import router as control_router
+    from bot.handlers.card_actions import router as card_router
 
     storage = MemoryStorage()
     dp = Dispatcher(storage=storage, db=db, scheduler=scheduler)
@@ -15,5 +16,6 @@ def setup_dispatcher(db: Database, scheduler: Scheduler | None = None) -> Dispat
     dp.include_router(start_router)
     dp.include_router(filters_router)
     dp.include_router(control_router)
+    dp.include_router(card_router)
 
     return dp

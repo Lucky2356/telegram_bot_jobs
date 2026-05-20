@@ -9,6 +9,7 @@ from scrapers.rabota_ru import RabotaRuScraper
 from scrapers.habr_career import HabrCareerScraper
 from scrapers.base import VacancyData, BaseScraper
 from bot.messages import format_vacancy_card
+from bot.keyboards import build_vacancy_actions_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -103,12 +104,20 @@ class Scheduler:
         if await self.db.is_sent(user.id, vac.id):
             return
 
+        if await self.db.is_blocked(user.id, vac_data.company, vac_data.title):
+            return
+
         card = format_vacancy_card(vac_data)
         try:
-            await self.bot.send_message(
+            msg = await self.bot.send_message(
                 chat_id=user.telegram_id,
                 text=card,
                 disable_web_page_preview=True,
+            )
+            await self.bot.send_message(
+                chat_id=user.telegram_id,
+                text="⚡",
+                reply_markup=build_vacancy_actions_keyboard(vac.id, vac_data.source, vac_data.url),
             )
             await self.db.mark_sent(user.id, vac.id)
             logger.info("Sent vacancy %s to user %s", vac_data.title[:50], user.telegram_id)
