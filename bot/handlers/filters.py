@@ -5,10 +5,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from bot.keyboards import (
     FilterCallback, WizardAction,
-    build_keywords_keyboard, build_city_keyboard,
-    build_salary_keyboard, build_employment_keyboard,
-    build_sites_keyboard, build_confirm_keyboard,
-    build_start_keyboard, build_filters_list_keyboard,
+    build_keywords_keyboard, build_exclude_keywords_keyboard,
+    build_city_keyboard, build_salary_keyboard,
+    build_employment_keyboard, build_sites_keyboard,
+    build_confirm_keyboard, build_start_keyboard,
+    build_filters_list_keyboard,
     SALARIES, EMPLOYMENT_TYPES, SITES,
 )
 from core.database.repository import Database
@@ -18,6 +19,7 @@ router = Router()
 
 class FilterWizard(StatesGroup):
     keywords = State()
+    exclude_keywords = State()
     city = State()
     salary = State()
     employment = State()
@@ -29,6 +31,7 @@ class FilterWizard(StatesGroup):
 async def cmd_add_filter(message: Message, state: FSMContext):
     await state.update_data(
         selected_keywords=[],
+        excluded_keywords=[],
         city=None,
         salary_key=None,
         salary_min=None,
@@ -38,7 +41,7 @@ async def cmd_add_filter(message: Message, state: FSMContext):
     )
     await state.set_state(FilterWizard.keywords)
     await message.answer(
-        "Шаг 1 из 5 — Выбери ключевые слова\n\n"
+        "Шаг 1 — Выбери ключевые слова для поиска\n\n"
         "Нажимай на слова, чтобы добавить их в фильтр.\n"
         "Можно выбрать несколько из разных групп.",
         reply_markup=build_keywords_keyboard([]),
@@ -81,10 +84,40 @@ async def on_keyword_done(callback: CallbackQuery, state: FSMContext):
     if not selected:
         await callback.answer("Выбери хотя бы одно ключевое слово!", show_alert=True)
         return
+    await state.set_state(FilterWizard.exclude_keywords)
+    excluded = data.get("excluded_keywords", [])
+    await callback.message.edit_text(
+        "Шаг 2 — Выбери слова, которые нужно ИСКЛЮЧИТЬ\n\n"
+        "Если хочешь исключить какие-то технологии или роли, отметь их.\n"
+        "Если нет — просто нажми «Далее».",
+        reply_markup=build_exclude_keywords_keyboard(excluded),
+    )
+    await callback.answer()
+
+
+@router.callback_query(FilterCallback.filter(F.action == WizardAction.EXCLUDE_TOGGLE))
+async def on_exclude_toggle(callback: CallbackQuery, state: FSMContext):
+    kw = FilterCallback.unpack(callback.data).value
+    data = await state.get_data()
+    excluded: list[str] = data.get("excluded_keywords", [])
+    if kw in excluded:
+        excluded.remove(kw)
+    else:
+        excluded.append(kw)
+    await state.update_data(excluded_keywords=excluded)
+    await callback.message.edit_reply_markup(
+        reply_markup=build_exclude_keywords_keyboard(excluded)
+    )
+    await callback.answer()
+
+
+@router.callback_query(FilterCallback.filter(F.action == WizardAction.EXCLUDE_DONE))
+async def on_exclude_done(callback: CallbackQuery, state: FSMContext):
     await state.set_state(FilterWizard.city)
+    data = await state.get_data()
     city = data.get("city", None)
     await callback.message.edit_text(
-        "Шаг 2 из 5 — Выбери город\n\n"
+        "Шаг 3 — Выбери город\n\n"
         "Если город не важен, нажми «Любой».",
         reply_markup=build_city_keyboard(city),
     )
@@ -109,7 +142,7 @@ async def on_city_done(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     salary_key = data.get("salary_key", None)
     await callback.message.edit_text(
-        "Шаг 3 из 5 — Выбери диапазон зарплаты",
+        "Шаг 4 — Выбери диапазон зарплаты",
         reply_markup=build_salary_keyboard(salary_key),
     )
     await callback.answer()
@@ -126,7 +159,7 @@ async def on_salary_select(callback: CallbackQuery, state: FSMContext):
         city = data.get("city", None)
         await state.set_state(FilterWizard.city)
         await callback.message.edit_text(
-            "Шаг 2 из 5 — Выбери город",
+            "Шаг 3 — Выбери город",
             reply_markup=build_city_keyboard(city),
         )
         await callback.answer()
@@ -150,7 +183,7 @@ async def on_salary_done(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     emp_types = data.get("employment_types", [])
     await callback.message.edit_text(
-        "Шаг 4 из 5 — Выбери тип занятости\n\n"
+        "Шаг 5 — Выбери тип занятости\n\n"
         "Можно выбрать несколько вариантов.",
         reply_markup=build_employment_keyboard(emp_types),
     )
@@ -181,7 +214,7 @@ async def on_employment_done(callback: CallbackQuery, state: FSMContext):
         salary_key = data.get("salary_key", None)
         await state.set_state(FilterWizard.salary)
         await callback.message.edit_text(
-            "Шаг 3 из 5 — Выбери диапазон зарплаты",
+            "Шаг 4 — Выбери диапазон зарплаты",
             reply_markup=build_salary_keyboard(salary_key),
         )
         await callback.answer()
@@ -190,7 +223,7 @@ async def on_employment_done(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     sites = data.get("sites", [])
     await callback.message.edit_text(
-        "Шаг 5 из 5 — Выбери сайты для поиска\n\n"
+        "Шаг 6 — Выбери сайты для поиска\n\n"
         "Можно выбрать несколько.",
         reply_markup=build_sites_keyboard(sites),
     )
@@ -221,7 +254,7 @@ async def on_site_done(callback: CallbackQuery, state: FSMContext):
         emp_types = data.get("employment_types", [])
         await state.set_state(FilterWizard.employment)
         await callback.message.edit_text(
-            "Шаг 4 из 5 — Выбери тип занятости",
+            "Шаг 5 — Выбери тип занятости",
             reply_markup=build_employment_keyboard(emp_types),
         )
         await callback.answer()
@@ -232,7 +265,6 @@ async def on_site_done(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Выбери хотя бы один сайт!", show_alert=True)
         return
 
-    # Build name
     kws = data.get("selected_keywords", [])
     name_parts = kws[:3]
     salary_key = data.get("salary_key")
@@ -248,6 +280,9 @@ async def on_site_done(callback: CallbackQuery, state: FSMContext):
 
     lines = [f"📋 <b>Имя:</b> {name}"]
     lines.append(f"<b>Ключевые слова:</b> {', '.join(kws)}")
+    excluded = data.get("excluded_keywords", [])
+    if excluded:
+        lines.append(f"<b>Исключить:</b> {', '.join(excluded)}")
     city = data.get("city")
     lines.append(f"<b>Город:</b> {city or 'Любой'}")
     if data.get("salary_min") is not None or data.get("salary_max") is not None:
@@ -285,6 +320,7 @@ async def on_confirm(callback: CallbackQuery, state: FSMContext, db: Database):
         salary_max=data["salary_max"],
         employment_types=data["employment_types"],
         sites=data["sites"],
+        exclude_keywords=data.get("excluded_keywords", []),
     )
     await state.clear()
     await callback.message.edit_text(

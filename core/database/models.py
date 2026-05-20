@@ -29,6 +29,7 @@ class VacancyFilter(Base):
     salary_max: Mapped[int | None] = mapped_column(Integer)
     employment_types: Mapped[str] = mapped_column(Text, default="[]")
     sites: Mapped[str] = mapped_column(Text, default="[]")
+    exclude_keywords: Mapped[str] = mapped_column(Text, default="[]")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -37,6 +38,12 @@ class VacancyFilter(Base):
 
     def set_keywords(self, keywords: list[str]):
         self.keywords = json.dumps(keywords, ensure_ascii=False)
+
+    def get_exclude_keywords(self) -> list[str]:
+        return json.loads(self.exclude_keywords)
+
+    def set_exclude_keywords(self, keywords: list[str]):
+        self.exclude_keywords = json.dumps(keywords, ensure_ascii=False)
 
     def get_employment_types(self) -> list[str]:
         return json.loads(self.employment_types)

@@ -62,6 +62,7 @@ class Scheduler:
         city = vf.city
         sites = vf.get_sites()
         emp_types = vf.get_employment_types()
+        exclude_kw = vf.get_exclude_keywords()
 
         for site_key in sites:
             scraper = self._get_scraper(site_key)
@@ -75,15 +76,20 @@ class Scheduler:
 
             for vac_data in vacancies:
                 try:
-                    await self._process_vacancy(vac_data, vf, user, keywords, emp_types)
+                    await self._process_vacancy(
+                        vac_data, vf, user, keywords, emp_types, exclude_kw,
+                    )
                 except Exception as e:
                     logger.warning("Process vacancy error: %s", e)
 
     async def _process_vacancy(
         self, vac_data: VacancyData, vf, user,
         keywords: list[str], emp_types: list[str],
+        exclude_keywords: list[str] | None = None,
     ):
         if not self._matches_keywords(vac_data, keywords):
+            return
+        if exclude_keywords and self._has_excluded(vac_data, exclude_keywords):
             return
         if emp_types and vac_data.employment_type and vac_data.employment_type not in emp_types:
             return
@@ -119,4 +125,11 @@ class Scheduler:
             for kw in keywords:
                 if kw.lower() in desc_lower:
                     return True
+        return False
+
+    def _has_excluded(self, vac: VacancyData, exclude_keywords: list[str]) -> bool:
+        text_lower = f"{vac.title} {vac.description or ''}".lower()
+        for kw in exclude_keywords:
+            if kw.lower() in text_lower:
+                return True
         return False

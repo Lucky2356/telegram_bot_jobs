@@ -49,6 +49,7 @@ async def main_filters(callback: CallbackQuery, db: Database):
 async def main_add(callback: CallbackQuery, state: FSMContext):
     await state.update_data(
         selected_keywords=[],
+        excluded_keywords=[],
         city=None,
         salary_key=None,
         salary_min=None,
@@ -58,7 +59,7 @@ async def main_add(callback: CallbackQuery, state: FSMContext):
     )
     await state.set_state(FilterWizard.keywords)
     await callback.message.edit_text(
-        "Шаг 1 из 5 — Выбери ключевые слова\n\n"
+        "Шаг 1 — Выбери ключевые слова для поиска\n\n"
         "Нажимай на слова, чтобы добавить их в фильтр.\n"
         "Можно выбрать несколько из разных групп.",
         reply_markup=build_keywords_keyboard([]),

@@ -5,6 +5,7 @@ from aiogram.filters import Command
 from bot.keyboards import (
     FilterCallback, WizardAction,
     build_filters_list_keyboard, build_start_keyboard,
+    build_filter_detail_keyboard, EMPLOYMENT_TYPES, SITES, SALARIES,
 )
 from core.database.repository import Database
 from core.scheduler import Scheduler
@@ -36,9 +37,8 @@ async def on_filter_toggle(callback: CallbackQuery, db: Database):
     await callback.message.edit_reply_markup(
         reply_markup=build_filters_list_keyboard(filters)
     )
-    status = "активен 🟢" if active else "на паузе 🔴"
+    status = "🟢 активен" if active else "🔴 на паузе"
     await callback.answer(f"Фильтр {status}")
-    await callback.answer()
 
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.FILTER_DELETE))
@@ -57,6 +57,68 @@ async def on_filter_delete(callback: CallbackQuery, db: Database):
             reply_markup=build_start_keyboard(),
         )
     await callback.answer("Фильтр удалён 🗑")
+
+
+@router.callback_query(FilterCallback.filter(F.action == WizardAction.FILTER_VIEW))
+async def on_filter_view(callback: CallbackQuery, db: Database):
+    filter_id = int(FilterCallback.unpack(callback.data).value)
+    vf = await db.get_filter(filter_id)
+    if vf is None:
+        await callback.answer("Фильтр не найден", show_alert=True)
+        return
+    lines = [f"📋 <b>{vf.name}</b>"]
+    lines.append(f"<b>Статус:</b> {'🟢 Активен' if vf.active else '🔴 На паузе'}")
+    lines.append(f"<b>Ключевые слова:</b> {', '.join(vf.get_keywords())}")
+    exc = vf.get_exclude_keywords()
+    if exc:
+        lines.append(f"<b>Исключить:</b> {', '.join(exc)}")
+    lines.append(f"<b>Город:</b> {vf.city or 'Любой'}")
+    if vf.salary_min is not None or vf.salary_max is not None:
+        parts = []
+        if vf.salary_min is not None:
+            parts.append(f"от {vf.salary_min:,}".replace(",", " "))
+        if vf.salary_max is not None:
+            parts.append(f"до {vf.salary_max:,}".replace(",", " "))
+        lines.append(f"<b>Зарплата:</b> {' '.join(parts)} ₽")
+    else:
+        lines.append("<b>Зарплата:</b> Любая")
+    emp_labels = [EMPLOYMENT_TYPES.get(e, e) for e in vf.get_employment_types()]
+    lines.append(f"<b>Занятость:</b> {', '.join(emp_labels) or 'Любая'}")
+    site_labels = [SITES.get(s, s) for s in vf.get_sites()]
+    lines.append(f"<b>Сайты:</b> {', '.join(site_labels)}")
+    await callback.message.edit_text(
+        "\n".join(lines),
+        reply_markup=build_filter_detail_keyboard(vf.id, vf.active),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.callback_query(FilterCallback.filter(F.action == WizardAction.FILTER_CLONE))
+async def on_filter_clone(callback: CallbackQuery, db: Database):
+    filter_id = int(FilterCallback.unpack(callback.data).value)
+    vf = await db.get_filter(filter_id)
+    if vf is None:
+        await callback.answer("Фильтр не найден", show_alert=True)
+        return
+    new_vf = await db.create_filter(
+        user_id=vf.user_id,
+        name=vf.name + " (копия)",
+        keywords=vf.get_keywords(),
+        city=vf.city,
+        salary_min=vf.salary_min,
+        salary_max=vf.salary_max,
+        employment_types=vf.get_employment_types(),
+        sites=vf.get_sites(),
+        exclude_keywords=vf.get_exclude_keywords(),
+    )
+    user = await db.get_or_create_user(callback.from_user.id)
+    filters = await db.get_user_filters(user.id)
+    await callback.message.edit_text(
+        f"✅ Фильтр «{new_vf.name}» создан из копии «{vf.name}»",
+        reply_markup=build_filters_list_keyboard(filters),
+    )
+    await callback.answer()
 
 
 @router.message(Command("pause"))
