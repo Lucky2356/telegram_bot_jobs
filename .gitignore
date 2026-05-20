@@ -1,0 +1,15 @@
+# Environment (contains secrets)
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Database
+vacancies.db
+vacancies.db-journal
+
+# IDE
+.idea/
+.vscode/
+*.swp

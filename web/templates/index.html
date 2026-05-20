@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Bot Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 24px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+  h1 small { font-size: 14px; font-weight: 400; color: #666; }
+  .actions { display: flex; gap: 10px; margin-bottom: 20px; }
+  .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: #4f46e5; color: #fff; }
+  .btn-primary:hover { background: #4338ca; }
+  .btn-danger { background: #ef4444; color: #fff; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .card { background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  .card-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+  th { font-weight: 600; color: #555; font-size: 12px; text-transform: uppercase; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; background: #eef2ff; color: #4338ca; margin: 1px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+  .badge-green { background: #dcfce7; color: #16a34a; }
+  .badge-red { background: #fee2e2; color: #dc2626; }
+  .toggle { position: relative; display: inline-block; width: 36px; height: 20px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; border-radius: 20px; transition: .3s; }
+  .toggle .slider:before { content: ""; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .3s; }
+  .toggle input:checked + .slider { background: #4f46e5; }
+  .toggle input:checked + .slider:before { transform: translateX(16px); }
+  .empty { text-align: center; padding: 40px; color: #999; }
+  .status-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat { flex: 1; min-width: 120px; background: #fff; border-radius: 8px; padding: 16px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  .stat-value { font-size: 28px; font-weight: 700; color: #4f46e5; }
+  .stat-label { font-size: 12px; color: #666; margin-top: 4px; }
+  #check-result { display: none; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
+  .loading { opacity: .6; pointer-events: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>
+    🔍 Job Bot
+    <small>Панель управления фильтрами вакансий</small>
+  </h1>
+
+  <div class="status-row">
+    <div class="stat">
+      <div class="stat-value">{{ filters|length }}</div>
+      <div class="stat-label">Активных фильтров</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ history|length }}</div>
+      <div class="stat-label">Недавно отправлено</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ filters|selectattr('active')|list|length }}</div>
+      <div class="stat-label">Включено</div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-primary" onclick="checkNow()">🔍 Проверить сейчас</button>
+    <span style="font-size:13px;color:#666;align-self:center;">
+      Вакансии проверяются автоматически раз в час
+    </span>
+  </div>
+  <div id="check-result"></div>
+
+  <div class="card">
+    <div class="card-title">📋 Фильтры</div>
+    {% if filters %}
+    <table>
+      <thead>
+        <tr>
+          <th>Название</th>
+          <th>Ключевые слова</th>
+          <th>Город</th>
+          <th>Зарплата</th>
+          <th>Занятость</th>
+          <th>Сайты</th>
+          <th>Статус</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for vf in filters %}
+        <tr>
+          <td><strong>{{ vf.name }}</strong></td>
+          <td>{% for kw in vf.get_keywords() %}<span class="tag">{{ kw }}</span> {% endfor %}</td>
+          <td>{{ vf.city or 'Любой' }}</td>
+          <td>
+            {% if vf.salary_min or vf.salary_max %}
+              {% if vf.salary_min %}от {{ "{:,}".format(vf.salary_min).replace(',', ' ') }}{% endif %}
+              {% if vf.salary_max %}до {{ "{:,}".format(vf.salary_max).replace(',', ' ') }}{% endif %} ₽
+            {% else %}Любая{% endif %}
+          </td>
+          <td>
+            {% for e in vf.get_employment_types() %}
+              <span class="tag">{{ employment_types.get(e, e) }}</span>
+            {% else %}Любая{% endfor %}
+          </td>
+          <td>{% for s in vf.get_sites() %}<span class="tag">{{ sites.get(s, s) }}</span> {% endfor %}</td>
+          <td>
+            <label class="toggle">
+              <input type="checkbox" {{ 'checked' if vf.active }} onchange="toggleFilter({{ vf.id }})">
+              <span class="slider"></span>
+            </label>
+          </td>
+          <td>
+            <button class="btn btn-danger btn-sm" onclick="deleteFilter({{ vf.id }})">🗑</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">Фильтров пока нет. Создайте их в Telegram через команду /add_filter</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">📨 Последние отправленные вакансии</div>
+    {% if history %}
+    <table>
+      <thead>
+        <tr>
+          <th>Вакансия</th>
+          <th>Компания</th>
+          <th>Зарплата</th>
+          <th>Сайт</th>
+          <th>Отправлено</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sv, v, u in history %}
+        <tr>
+          <td><strong>{{ v.title[:60] }}</strong></td>
+          <td>{{ v.company or '—' }}</td>
+          <td>{{ v.salary_text or '—' }}</td>
+          <td><span class="tag">{{ v.source }}</span></td>
+          <td>{{ sv.sent_at.strftime('%d.%m %H:%M') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">Пока ничего не отправлялось</div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  async function toggleFilter(id) {
+    const resp = await fetch(`/api/filters/${id}/toggle`, { method: 'POST' });
+    if (!resp.ok) alert('Ошибка переключения фильтра');
+  }
+
+  async function deleteFilter(id) {
+    if (!confirm('Удалить фильтр?')) return;
+    const resp = await fetch(`/api/filters/${id}`, { method: 'DELETE' });
+    if (resp.ok) location.reload();
+    else alert('Ошибка удаления');
+  }
+
+  async function checkNow() {
+    const btn = document.querySelector('.btn-primary');
+    const result = document.getElementById('check-result');
+    btn.classList.add('loading');
+    result.style.display = 'block';
+    result.className = '';
+    result.textContent = '🔍 Проверяю вакансии...';
+    try {
+      const resp = await fetch('/api/check_now', { method: 'POST' });
+      const data = await resp.json();
+      if (data.ok) {
+        result.className = 'btn btn-primary';
+        result.textContent = '✅ Проверка запущена! Результаты придут в Telegram.';
+      } else {
+        result.className = 'btn btn-danger';
+        result.textContent = '❌ ' + (data.message || 'Ошибка');
+      }
+    } catch(e) {
+      result.className = 'btn btn-danger';
+      result.textContent = '❌ Ошибка соединения';
+    }
+    btn.classList.remove('loading');
+  }
+</script>
+</body>
+</html>

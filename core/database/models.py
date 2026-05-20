@@ -1,0 +1,81 @@
+import json
+from datetime import datetime
+from sqlalchemy import Column, Integer, BigInteger, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
+    username: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class VacancyFilter(Base):
+    __tablename__ = "filters"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255))
+    keywords: Mapped[str] = mapped_column(Text, default="[]")
+    city: Mapped[str | None] = mapped_column(String(100))
+    salary_min: Mapped[int | None] = mapped_column(Integer)
+    salary_max: Mapped[int | None] = mapped_column(Integer)
+    employment_types: Mapped[str] = mapped_column(Text, default="[]")
+    sites: Mapped[str] = mapped_column(Text, default="[]")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def get_keywords(self) -> list[str]:
+        return json.loads(self.keywords)
+
+    def set_keywords(self, keywords: list[str]):
+        self.keywords = json.dumps(keywords, ensure_ascii=False)
+
+    def get_employment_types(self) -> list[str]:
+        return json.loads(self.employment_types)
+
+    def set_employment_types(self, types: list[str]):
+        self.employment_types = json.dumps(types, ensure_ascii=False)
+
+    def get_sites(self) -> list[str]:
+        return json.loads(self.sites)
+
+    def set_sites(self, sites: list[str]):
+        self.sites = json.dumps(sites, ensure_ascii=False)
+
+
+class Vacancy(Base):
+    __tablename__ = "vacancies"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(500))
+    company: Mapped[str | None] = mapped_column(String(500))
+    salary_text: Mapped[str | None] = mapped_column(String(255))
+    employment_type: Mapped[str | None] = mapped_column(String(50))
+    city: Mapped[str | None] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str] = mapped_column(String(1000))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("source", "source_id", name="uq_source_vacancy"),
+    )
+
+
+class SentVacancy(Base):
+    __tablename__ = "sent_vacancies"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    vacancy_id: Mapped[int] = mapped_column(ForeignKey("vacancies.id"), nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
