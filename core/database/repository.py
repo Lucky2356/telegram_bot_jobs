@@ -94,6 +94,30 @@ class Database:
             await session.execute(delete(VacancyFilter).where(VacancyFilter.id == filter_id))
             await session.commit()
 
+    async def update_filter(
+        self, filter_id: int, name: str,
+        keywords: list[str], city: str | None,
+        salary_min: int | None, salary_max: int | None,
+        employment_types: list[str], sites: list[str],
+    ) -> VacancyFilter | None:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(VacancyFilter).where(VacancyFilter.id == filter_id)
+            )
+            vf = result.scalar_one_or_none()
+            if vf is None:
+                return None
+            vf.name = name
+            vf.set_keywords(keywords)
+            vf.city = city
+            vf.salary_min = salary_min
+            vf.salary_max = salary_max
+            vf.set_employment_types(employment_types)
+            vf.set_sites(sites)
+            await session.commit()
+            await session.refresh(vf)
+            return vf
+
     async def get_all_active_filters(self) -> list[VacancyFilter]:
         async with self.session_factory() as session:
             result = await session.execute(

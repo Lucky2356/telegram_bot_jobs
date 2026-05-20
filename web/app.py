@@ -1,12 +1,23 @@
 import asyncio
 import uvicorn
+from pydantic import BaseModel
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from core.config import settings
 from core.database.repository import Database
 from core.scheduler import Scheduler
-from bot.keyboards import EMPLOYMENT_TYPES, SITES
+from bot.keyboards import EMPLOYMENT_TYPES, SITES, KEYWORDS_BY_GROUP, CITIES, SALARIES
+
+
+class FilterUpdate(BaseModel):
+    name: str
+    keywords: list[str]
+    city: str | None = None
+    salary_min: int | None = None
+    salary_max: int | None = None
+    employment_types: list[str]
+    sites: list[str]
 
 
 def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
@@ -24,6 +35,9 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
                 "history": history,
                 "employment_types": EMPLOYMENT_TYPES,
                 "sites": SITES,
+                "keyword_groups": KEYWORDS_BY_GROUP,
+                "cities": CITIES,
+                "salaries": SALARIES,
             },
         )
 
@@ -35,15 +49,58 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
                 "id": vf.id,
                 "name": vf.name,
                 "keywords": vf.get_keywords(),
-                "city": vf.city or "Любой",
+                "city": vf.city,
                 "salary_min": vf.salary_min,
                 "salary_max": vf.salary_max,
-                "employment_types": [EMPLOYMENT_TYPES.get(e, e) for e in vf.get_employment_types()],
-                "sites": [SITES.get(s, s) for s in vf.get_sites()],
+                "employment_types": vf.get_employment_types(),
+                "sites": vf.get_sites(),
                 "active": vf.active,
             }
             for vf in filters
         ]
+
+    @app.get("/api/filters/{filter_id}")
+    async def api_get_filter(filter_id: int):
+        vf = await db.get_filter(filter_id)
+        if vf is None:
+            return {"ok": False, "message": "Filter not found"}
+        return {
+            "id": vf.id,
+            "name": vf.name,
+            "keywords": vf.get_keywords(),
+            "city": vf.city,
+            "salary_min": vf.salary_min,
+            "salary_max": vf.salary_max,
+            "employment_types": vf.get_employment_types(),
+            "sites": vf.get_sites(),
+            "active": vf.active,
+        }
+
+    @app.put("/api/filters/{filter_id}")
+    async def api_update_filter(filter_id: int, data: FilterUpdate):
+        vf = await db.update_filter(
+            filter_id=filter_id,
+            name=data.name,
+            keywords=data.keywords,
+            city=data.city,
+            salary_min=data.salary_min,
+            salary_max=data.salary_max,
+            employment_types=data.employment_types,
+            sites=data.sites,
+        )
+        if vf is None:
+            return {"ok": False, "message": "Filter not found"}, 404
+        return {"ok": True, "filter": {
+            "id": vf.id,
+            "name": vf.name,
+            "keywords": vf.get_keywords(),
+            "city": vf.city,
+            "salary_min": vf.salary_min,
+            "salary_max": vf.salary_max,
+            "employment_types": vf.get_employment_types(),
+            "sites": vf.get_sites(),
+            "active": vf.active,
+        }}
 
     @app.post("/api/filters/{filter_id}/toggle")
     async def api_toggle(filter_id: int):
@@ -71,6 +128,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
                 "company": v.company,
                 "salary": v.salary_text,
                 "source": v.source,
+                "url": v.url,
                 "sent_at": sv.sent_at.isoformat() if sv.sent_at else None,
             }
             for sv, v, u in history

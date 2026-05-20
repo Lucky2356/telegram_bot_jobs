@@ -20,25 +20,9 @@
     --shadow: rgba(0,0,0,0.1);
     --stat-bg: #fff;
     --stat-value: #4f46e5;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0f172a;
-      --surface: #1e293b;
-      --text: #e2e8f0;
-      --text-secondary: #94a3b8;
-      --border: #334155;
-      --primary: #818cf8;
-      --primary-hover: #6366f1;
-      --danger: #f87171;
-      --danger-hover: #ef4444;
-      --tag-bg: #1e1b4b;
-      --tag-text: #a5b4fc;
-      --shadow: rgba(0,0,0,0.3);
-      --stat-bg: #1e293b;
-      --stat-value: #818cf8;
-    }
+    --overlay: rgba(0,0,0,0.4);
+    --input-bg: #fff;
+    --input-border: #d1d5db;
   }
 
   .dark {
@@ -56,6 +40,9 @@
     --shadow: rgba(0,0,0,0.3);
     --stat-bg: #1e293b;
     --stat-value: #818cf8;
+    --overlay: rgba(0,0,0,0.6);
+    --input-bg: #0f172a;
+    --input-border: #475569;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -76,47 +63,20 @@
     gap: 12px;
     margin-bottom: 20px;
   }
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
+  .header-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   h1 { font-size: clamp(20px, 4vw, 24px); }
-  h1 small {
-    font-size: 13px;
-    font-weight: 400;
-    color: var(--text-secondary);
-  }
+  h1 small { font-size: 13px; font-weight: 400; color: var(--text-secondary); }
   .theme-btn {
-    background: none;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 6px 10px;
-    cursor: pointer;
-    font-size: 16px;
-    color: var(--text);
+    background: none; border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 10px; cursor: pointer; font-size: 16px; color: var(--text);
     transition: background .2s;
   }
   .theme-btn:hover { background: var(--border); }
 
-  .actions {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
+  .actions { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
   .btn {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
+    padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer;
+    font-size: 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
     transition: opacity .2s;
   }
   .btn-primary { background: var(--primary); color: #fff; }
@@ -124,120 +84,105 @@
   .btn-danger { background: var(--danger); color: #fff; }
   .btn-danger:hover { background: var(--danger-hover); }
   .btn-sm { padding: 4px 10px; font-size: 12px; }
-  .btn-outline { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
-  .btn-outline:hover { background: var(--primary); color: #fff; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-ghost:hover { background: var(--border); }
 
   .card {
-    background: var(--surface);
-    border-radius: 10px;
-    padding: clamp(12px, 3vw, 20px);
-    margin-bottom: 20px;
-    box-shadow: 0 1px 3px var(--shadow);
-    transition: background .3s;
+    background: var(--surface); border-radius: 10px;
+    padding: clamp(12px, 3vw, 20px); margin-bottom: 20px;
+    box-shadow: 0 1px 3px var(--shadow); transition: background .3s;
   }
   .card-title {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    font-size: 15px; font-weight: 600; margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: space-between;
   }
 
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { width: 100%; border-collapse: collapse; min-width: 600px; }
   th, td {
-    text-align: left;
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    font-size: 13px;
-    transition: border-color .3s;
+    text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border);
+    font-size: 13px; transition: border-color .3s;
   }
   th {
-    font-weight: 600;
-    color: var(--text-secondary);
-    font-size: 11px;
-    text-transform: uppercase;
-    white-space: nowrap;
+    font-weight: 600; color: var(--text-secondary); font-size: 11px;
+    text-transform: uppercase; white-space: nowrap;
   }
   td { vertical-align: middle; }
   td a { color: var(--primary); text-decoration: none; }
-  td a:hover { text-decoration: underline; }
+  td a:hover { text-decoration: underline; cursor: pointer; }
 
   .tag {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    background: var(--tag-bg);
-    color: var(--tag-text);
-    margin: 1px;
-    white-space: nowrap;
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; background: var(--tag-bg); color: var(--tag-text);
+    margin: 1px; white-space: nowrap;
   }
 
   .toggle {
-    position: relative;
-    display: inline-block;
-    width: 36px;
-    height: 20px;
-    flex-shrink: 0;
+    position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0;
   }
   .toggle input { opacity: 0; width: 0; height: 0; }
   .toggle .slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: #94a3b8;
-    border-radius: 20px;
-    transition: .3s;
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background: #94a3b8; border-radius: 20px; transition: .3s;
   }
   .toggle .slider:before {
-    content: "";
-    position: absolute;
-    height: 14px;
-    width: 14px;
-    left: 3px;
-    bottom: 3px;
-    background: #fff;
-    border-radius: 50%;
-    transition: .3s;
+    content: ""; position: absolute; height: 14px; width: 14px;
+    left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .3s;
   }
   .toggle input:checked + .slider { background: var(--primary); }
   .toggle input:checked + .slider:before { transform: translateX(16px); }
 
-  .empty {
-    text-align: center;
-    padding: 40px 16px;
-    color: var(--text-secondary);
-  }
+  .empty { text-align: center; padding: 40px 16px; color: var(--text-secondary); }
 
-  .status-row {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 20px;
-  }
+  .status-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
   .stat {
-    flex: 1;
-    min-width: calc(33.33% - 12px);
-    background: var(--stat-bg);
-    border-radius: 8px;
-    padding: 16px;
-    text-align: center;
-    box-shadow: 0 1px 3px var(--shadow);
-    transition: background .3s;
+    flex: 1; min-width: calc(33.33% - 12px); background: var(--stat-bg);
+    border-radius: 8px; padding: 16px; text-align: center;
+    box-shadow: 0 1px 3px var(--shadow); transition: background .3s;
   }
   .stat-value { font-size: clamp(24px, 5vw, 28px); font-weight: 700; color: var(--stat-value); }
   .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 
-  #check-result {
-    display: none;
-    padding: 12px;
-    border-radius: 6px;
-    margin-bottom: 12px;
-  }
+  #check-result { display: none; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
   .loading { opacity: .6; pointer-events: none; }
   .actions-hint { font-size: 13px; color: var(--text-secondary); }
+
+  /* Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: var(--overlay);
+    z-index: 1000; align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: 12px; padding: 24px;
+    width: 100%; max-width: 640px; max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 4px 24px var(--shadow);
+  }
+  .modal h2 { font-size: 18px; margin-bottom: 16px; }
+  .modal .close {
+    float: right; background: none; border: none; font-size: 20px;
+    cursor: pointer; color: var(--text-secondary);
+  }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; color: var(--text-secondary); }
+  .form-group input[type="text"],
+  .form-group select {
+    width: 100%; padding: 8px 12px; border: 1px solid var(--input-border);
+    border-radius: 6px; font-size: 14px; background: var(--input-bg);
+    color: var(--text);
+  }
+  .form-group input[type="text"]:focus,
+  .form-group select:focus { outline: none; border-color: var(--primary); }
+  .checkbox-group { display: flex; flex-wrap: wrap; gap: 4px; }
+  .checkbox-group label {
+    display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
+    border: 1px solid var(--input-border); border-radius: 6px; cursor: pointer;
+    font-size: 12px; transition: all .2s;
+  }
+  .checkbox-group label.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .checkbox-group input { display: none; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+  .modal .group-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 8px 0 4px; }
 
   @media (max-width: 768px) {
     body { padding: 10px; }
@@ -256,32 +201,20 @@
 <div class="container">
   <div class="header">
     <div class="header-left">
-      <h1>
-        🔍 Job Bot
-        <small>Панель управления фильтрами</small>
-      </h1>
+      <h1>🔍 Job Bot <small>Панель управления фильтрами</small></h1>
     </div>
-    <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Переключить тему">🌙</button>
+    <button class="theme-btn" onclick="toggleTheme()" id="themeBtn">🌙</button>
   </div>
 
   <div class="status-row">
-    <div class="stat">
-      <div class="stat-value">{{ filters|length }}</div>
-      <div class="stat-label">Активных фильтров</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value">{{ history|length }}</div>
-      <div class="stat-label">Недавно отправлено</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value">{{ filters|selectattr('active')|list|length }}</div>
-      <div class="stat-label">Включено</div>
-    </div>
+    <div class="stat"><div class="stat-value">{{ filters|length }}</div><div class="stat-label">Активных фильтров</div></div>
+    <div class="stat"><div class="stat-value">{{ history|length }}</div><div class="stat-label">Недавно отправлено</div></div>
+    <div class="stat"><div class="stat-value">{{ filters|selectattr('active')|list|length }}</div><div class="stat-label">Включено</div></div>
   </div>
 
   <div class="actions">
     <button class="btn btn-primary" onclick="checkNow()">🔍 Проверить сейчас</button>
-    <span class="actions-hint">Проверка вакансий раз в час</span>
+    <span class="actions-hint">Автоматически раз в час</span>
   </div>
   <div id="check-result"></div>
 
@@ -290,36 +223,18 @@
     {% if filters %}
     <div class="table-wrap">
     <table>
-      <thead>
-        <tr>
-          <th>Название</th>
-          <th>Ключевые слова</th>
-          <th>Город</th>
-          <th>Зарплата</th>
-          <th>Занятость</th>
-          <th>Сайты</th>
-          <th>Статус</th>
-          <th></th>
-        </tr>
-      </thead>
+      <thead><tr>
+        <th>Название</th><th>Ключевые слова</th><th>Город</th><th>Зарплата</th><th>Занятость</th><th>Сайты</th><th>Статус</th><th></th>
+      </tr></thead>
       <tbody>
         {% for vf in filters %}
         <tr>
           <td><strong>{{ vf.name }}</strong></td>
           <td>{% for kw in vf.get_keywords() %}<span class="tag">{{ kw }}</span> {% endfor %}</td>
           <td>{{ vf.city or 'Любой' }}</td>
-          <td>
-            {% if vf.salary_min or vf.salary_max %}
-              {% if vf.salary_min %}от {{ "{:,}".format(vf.salary_min).replace(',', ' ') }}{% endif %}
-              {% if vf.salary_max %}до {{ "{:,}".format(vf.salary_max).replace(',', ' ') }}{% endif %} ₽
-            {% else %}Любая{% endif %}
-          </td>
-          <td>
-            {% for e in vf.get_employment_types() %}
-              <span class="tag">{{ employment_types.get(e, e) }}</span>
-            {% else %}Любая{% endfor %}
-          </td>
-          <td>{% for s in vf.get_sites() %}<span class="tag">{{ sites.get(s, s) }}</span> {% endfor %}</td>
+          <td>{% if vf.salary_min or vf.salary_max %}{% if vf.salary_min %}от {{ "{:,}".format(vf.salary_min).replace(',', ' ') }}{% endif %}{% if vf.salary_max %}до {{ "{:,}".format(vf.salary_max).replace(',', ' ') }}{% endif %} ₽{% else %}Любая{% endif %}</td>
+          <td>{% for e in vf.get_employment_types() %}<span class="tag">{{ employment_types.get(e, e) }}</span>{% else %}Любая{% endfor %}</td>
+          <td>{% for s in vf.get_sites() %}<span class="tag">{{ sites.get(s, s) }}</span>{% endfor %}</td>
           <td>
             <label class="toggle">
               <input type="checkbox" {{ 'checked' if vf.active }} onchange="toggleFilter({{ vf.id }})">
@@ -327,6 +242,7 @@
             </label>
           </td>
           <td>
+            <button class="btn btn-ghost btn-sm" onclick="openEdit({{ vf.id }})">✏️</button>
             <button class="btn btn-danger btn-sm" onclick="deleteFilter({{ vf.id }})">🗑</button>
           </td>
         </tr>
@@ -335,7 +251,7 @@
     </table>
     </div>
     {% else %}
-    <div class="empty">Фильтров пока нет. Создайте их в Telegram через /add_filter</div>
+    <div class="empty">Фильтров пока нет. Создайте в Telegram через /add_filter</div>
     {% endif %}
   </div>
 
@@ -344,23 +260,11 @@
     {% if history %}
     <div class="table-wrap">
     <table>
-      <thead>
-        <tr>
-          <th>Вакансия</th>
-          <th>Компания</th>
-          <th>Зарплата</th>
-          <th>Сайт</th>
-          <th>Отправлено</th>
-        </tr>
-      </thead>
+      <thead><tr><th>Вакансия</th><th>Компания</th><th>Зарплата</th><th>Сайт</th><th>Отправлено</th></tr></thead>
       <tbody>
         {% for sv, v, u in history %}
         <tr>
-          <td>
-            <a href="{{ v.url }}" target="_blank" rel="noopener">
-              {{ v.title[:60] }}
-            </a>
-          </td>
+          <td><a href="{{ v.url }}" target="_blank" rel="noopener">{{ v.title[:60] }}</a></td>
           <td>{{ v.company or '—' }}</td>
           <td>{{ v.salary_text or '—' }}</td>
           <td><span class="tag">{{ v.source }}</span></td>
@@ -376,39 +280,39 @@
   </div>
 </div>
 
-<script>
-  function getTheme() {
-    return localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  }
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <button class="close" onclick="closeEdit()">✕</button>
+    <h2>✏️ Редактировать фильтр</h2>
+    <div id="editForm"></div>
+  </div>
+</div>
 
+<script>
+  // Theme
+  function getTheme() {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark' || saved === 'light') return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
   function setTheme(theme) {
     document.body.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('theme', theme);
     document.getElementById('themeBtn').textContent = theme === 'dark' ? '☀️' : '🌙';
   }
-
-  function toggleTheme() {
-    setTheme(getTheme() === 'dark' ? 'light' : 'dark');
-  }
-
   setTheme(getTheme());
+  function toggleTheme() { setTheme(getTheme() === 'dark' ? 'light' : 'dark'); }
 
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-    if (!localStorage.getItem('theme')) {
-      setTheme(e.matches ? 'dark' : 'light');
-    }
-  });
-
+  // Filters CRUD
   async function toggleFilter(id) {
-    const resp = await fetch(`/api/filters/${id}/toggle`, { method: 'POST' });
-    if (!resp.ok) alert('Ошибка переключения фильтра');
+    await fetch(`/api/filters/${id}/toggle`, { method: 'POST' });
   }
 
   async function deleteFilter(id) {
     if (!confirm('Удалить фильтр?')) return;
-    const resp = await fetch(`/api/filters/${id}`, { method: 'DELETE' });
-    if (resp.ok) location.reload();
-    else alert('Ошибка удаления');
+    await fetch(`/api/filters/${id}`, { method: 'DELETE' });
+    location.reload();
   }
 
   async function checkNow() {
@@ -421,19 +325,151 @@
     try {
       const resp = await fetch('/api/check_now', { method: 'POST' });
       const data = await resp.json();
-      if (data.ok) {
-        result.className = 'btn btn-primary';
-        result.textContent = '✅ Проверка запущена! Результаты придут в Telegram.';
-      } else {
-        result.className = 'btn btn-danger';
-        result.textContent = '❌ ' + (data.message || 'Ошибка');
-      }
+      result.className = 'btn ' + (data.ok ? 'btn-primary' : 'btn-danger');
+      result.textContent = data.ok ? '✅ Проверка запущена!' : '❌ ' + (data.message || 'Ошибка');
     } catch(e) {
       result.className = 'btn btn-danger';
       result.textContent = '❌ Ошибка соединения';
     }
     btn.classList.remove('loading');
   }
+
+  // Edit modal
+  const KEYWORDS = {{ keyword_groups|tojson }};
+  const EMP_TYPES = {{ employment_types|tojson }};
+  const SITE_LIST = {{ sites|tojson }};
+  const CITIES = {{ cities|tojson }};
+  const SALARIES = {{ salaries|tojson }};
+  let editingFilterId = null;
+
+  function toggleCheckbox(group, value) {
+    const labels = document.querySelectorAll(`#editForm [data-group="${group}"] label`);
+    const input = document.querySelector(`#editForm [data-group="${group}"] input[value="${value}"]`);
+    if (!input) return;
+    input.checked = !input.checked;
+    input.parentElement.classList.toggle('active', input.checked);
+  }
+
+  function buildCheckboxGroup(groupName, items, selected) {
+    let html = `<div class="group-title">${groupName}</div><div class="checkbox-group" data-group="${groupName}">`;
+    for (const [key, label] of Object.entries(items)) {
+      const isSel = selected.includes(key);
+      html += `<label class="${isSel ? 'active' : ''}"><input type="checkbox" value="${key}" ${isSel ? 'checked' : ''} onchange="this.parentElement.classList.toggle('active', this.checked)">${label}</label>`;
+    }
+    return html + '</div>';
+  }
+
+  async function openEdit(id) {
+    editingFilterId = id;
+    const resp = await fetch(`/api/filters/${id}`);
+    const data = await resp.json();
+    if (!data.ok && data.message) { alert(data.message); return; }
+    if (data.id === undefined) { alert('Ошибка загрузки фильтра'); return; }
+    const f = data;
+
+    let html = '<div class="form-group"><label>Название</label><input type="text" id="edit-name" value="' + f.name.replace(/"/g, '&quot;') + '"></div>';
+
+    html += '<div class="form-group"><label>Ключевые слова</label>';
+    for (const [group, items] of Object.entries(KEYWORDS)) {
+      const groupItems = {};
+      for (const kw of items) groupItems[kw] = kw;
+      html += buildCheckboxGroup(group, groupItems, f.keywords);
+    }
+    html += '</div>';
+
+    html += '<div class="form-group"><label>Город</label><select id="edit-city">';
+    html += '<option value="">Любой</option>';
+    for (const [key, label] of Object.entries(CITIES)) {
+      html += `<option value="${key}" ${f.city === key ? 'selected' : ''}>${label}</option>`;
+    }
+    html += '</select></div>';
+
+    html += '<div class="form-group"><label>Зарплата</label><select id="edit-salary">';
+    html += '<option value="any">Любая</option>';
+    for (const s of SALARIES) {
+      const sKey = s[0], sLabel = s[1];
+      let sMin = s[2], sMax = s[3];
+      const matched = (f.salary_min === sMin && f.salary_max === sMax);
+      html += `<option value="${sKey}" ${matched ? 'selected' : ''}>${sLabel}</option>`;
+    }
+    html += '</select></div>';
+
+    html += '<div class="form-group"><label>Тип занятости</label>';
+    html += buildCheckboxGroup('empl', EMP_TYPES, f.employment_types);
+    html += '</div>';
+
+    html += '<div class="form-group"><label>Сайты</label>';
+    html += buildCheckboxGroup('sites', SITE_LIST, f.sites);
+    html += '</div>';
+
+    html += '<div class="modal-actions">';
+    html += '<button class="btn btn-ghost" onclick="closeEdit()">Отмена</button>';
+    html += '<button class="btn btn-primary" onclick="saveEdit()">💾 Сохранить</button>';
+    html += '</div>';
+
+    document.getElementById('editForm').innerHTML = html;
+    document.getElementById('editModal').classList.add('active');
+  }
+
+  function closeEdit() {
+    document.getElementById('editModal').classList.remove('active');
+    editingFilterId = null;
+  }
+
+  function getSelected(container) {
+    const inputs = container.querySelectorAll('input[type="checkbox"]:checked');
+    return Array.from(inputs).map(i => i.value);
+  }
+
+  async function saveEdit() {
+    const name = document.getElementById('edit-name').value.trim();
+    if (!name) { alert('Введите название'); return; }
+
+    const keywords = getSelected(document.querySelector('#editForm [data-group="Языки"]').parentElement);
+    const roles = getSelected(document.querySelector('#editForm [data-group="Роли"]').parentElement);
+    const seniorities = getSelected(document.querySelector('#editForm [data-group="Сеньорити"]').parentElement);
+    const domains = getSelected(document.querySelector('#editForm [data-group="Домен"]').parentElement);
+    const allKeywords = [...keywords, ...roles, ...seniorities, ...domains];
+
+    const empTypes = getSelected(document.querySelector('#editForm [data-group="empl"]').parentElement);
+    const sites = getSelected(document.querySelector('#editForm [data-group="sites"]').parentElement);
+
+    if (!allKeywords.length) { alert('Выберите хотя бы одно ключевое слово'); return; }
+    if (!sites.length) { alert('Выберите хотя бы один сайт'); return; }
+
+    const salaryVal = document.getElementById('edit-salary').value;
+    let salaryMin = null, salaryMax = null;
+    for (const s of SALARIES) {
+      if (s[0] === salaryVal && salaryVal !== 'any') {
+        salaryMin = s[2]; salaryMax = s[3];
+        break;
+      }
+    }
+    const cityVal = document.getElementById('edit-city').value || null;
+
+    const body = {
+      name, keywords: allKeywords, city: cityVal,
+      salary_min: salaryMin, salary_max: salaryMax,
+      employment_types: empTypes, sites
+    };
+
+    const resp = await fetch(`/api/filters/${editingFilterId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (resp.ok) {
+      closeEdit();
+      location.reload();
+    } else {
+      alert('Ошибка сохранения');
+    }
+  }
+
+  // Close modal on overlay click
+  document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEdit();
+  });
 </script>
 </body>
 </html>
