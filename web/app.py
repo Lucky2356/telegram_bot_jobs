@@ -41,6 +41,34 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             },
         )
 
+    @app.post("/api/filters")
+    async def api_create_filter(data: FilterUpdate):
+        from sqlalchemy import select as sa_select
+        from core.database.models import User as UserModel
+        async with db.session_factory() as session:
+            first_user = (await session.execute(sa_select(UserModel))).scalar_one_or_none()
+        vf = await db.create_filter(
+            user_id=first_user.id if first_user else 1,
+            name=data.name,
+            keywords=data.keywords,
+            city=data.city,
+            salary_min=data.salary_min,
+            salary_max=data.salary_max,
+            employment_types=data.employment_types,
+            sites=data.sites,
+        )
+        return {"ok": True, "filter": {
+            "id": vf.id,
+            "name": vf.name,
+            "keywords": vf.get_keywords(),
+            "city": vf.city,
+            "salary_min": vf.salary_min,
+            "salary_max": vf.salary_max,
+            "employment_types": vf.get_employment_types(),
+            "sites": vf.get_sites(),
+            "active": vf.active,
+        }}
+
     @app.get("/api/filters")
     async def api_filters():
         filters = await db.get_all_active_filters()
@@ -129,9 +157,10 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
                 "salary": v.salary_text,
                 "source": v.source,
                 "url": v.url,
+                "filter_name": vf.name if vf else None,
                 "sent_at": sv.sent_at.isoformat() if sv.sent_at else None,
             }
-            for sv, v, u in history
+            for sv, v, u, vf in history
         ]
 
     return app

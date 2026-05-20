@@ -136,6 +136,40 @@ async def cmd_pause(message: Message, db: Database):
     await message.answer(f"⏸ {count} фильтров поставлено на паузу.")
 
 
+@router.message(Command("stats"))
+async def cmd_stats(message: Message, db: Database):
+    user = await db.get_or_create_user(message.from_user.id)
+    filters = await db.get_user_filters(user.id)
+    active = sum(1 for vf in filters if vf.active)
+    from core.database.models import Vacancy, SentVacancy
+    from sqlalchemy import select, func
+    async with db.session_factory() as session:
+        total_vac = (await session.execute(select(func.count(Vacancy.id)))).scalar() or 0
+        total_sent = (
+            await session.execute(
+                select(func.count(SentVacancy.id)).where(SentVacancy.user_id == user.id)
+            )
+        ).scalar() or 0
+        site_counts = (
+            await session.execute(
+                select(Vacancy.source, func.count(Vacancy.id))
+                .select_from(SentVacancy)
+                .join(Vacancy, SentVacancy.vacancy_id == Vacancy.id)
+                .where(SentVacancy.user_id == user.id)
+                .group_by(Vacancy.source)
+            )
+        ).all()
+    site_lines = "".join(f"\n• <b>{s or '?'}:</b> {c}" for s, c in site_counts)
+    await message.answer(
+        f"📊 <b>Статистика</b>\n\n"
+        f"🔸 Фильтров: {len(filters)} (активных: {active})\n"
+        f"🔸 Всего вакансий в базе: {total_vac}\n"
+        f"🔸 Отправлено тебе: {total_sent}"
+        + site_lines,
+        parse_mode="HTML",
+    )
+
+
 @router.message(Command("resume"))
 async def cmd_resume(message: Message, db: Database):
     user = await db.get_or_create_user(message.from_user.id)

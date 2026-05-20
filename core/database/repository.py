@@ -173,9 +173,9 @@ class Database:
             )
             return result.scalar_one_or_none() is not None
 
-    async def mark_sent(self, user_id: int, vacancy_id: int):
+    async def mark_sent(self, user_id: int, vacancy_id: int, filter_id: int | None = None):
         async with self.session_factory() as session:
-            session.add(SentVacancy(user_id=user_id, vacancy_id=vacancy_id))
+            session.add(SentVacancy(user_id=user_id, vacancy_id=vacancy_id, filter_id=filter_id))
             await session.commit()
 
     async def get_filter_count(self) -> int:
@@ -225,9 +225,10 @@ class Database:
     async def get_recent_sent(self, limit: int = 20) -> list[tuple[SentVacancy, Vacancy, User]]:
         async with self.session_factory() as session:
             stmt = (
-                select(SentVacancy, Vacancy, User)
+                select(SentVacancy, Vacancy, User, VacancyFilter)
                 .join(Vacancy, SentVacancy.vacancy_id == Vacancy.id)
                 .join(User, SentVacancy.user_id == User.id)
+                .outerjoin(VacancyFilter, SentVacancy.filter_id == VacancyFilter.id)
                 .order_by(SentVacancy.sent_at.desc())
                 .limit(limit)
             )

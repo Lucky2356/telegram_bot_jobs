@@ -87,6 +87,7 @@ class SentVacancy(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     vacancy_id: Mapped[int] = mapped_column(ForeignKey("vacancies.id"), nullable=False)
+    filter_id: Mapped[int | None] = mapped_column(ForeignKey("filters.id"))
     sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

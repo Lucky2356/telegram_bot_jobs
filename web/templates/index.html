@@ -214,6 +214,7 @@
 
   <div class="actions">
     <button class="btn btn-primary" onclick="checkNow()">🔍 Проверить сейчас</button>
+    <button class="btn btn-ghost" onclick="openCreate()">➕ Создать фильтр</button>
     <span class="actions-hint">Автоматически раз в час</span>
   </div>
   <div id="check-result"></div>
@@ -260,14 +261,15 @@
     {% if history %}
     <div class="table-wrap">
     <table>
-      <thead><tr><th>Вакансия</th><th>Компания</th><th>Зарплата</th><th>Сайт</th><th>Отправлено</th></tr></thead>
+      <thead><tr><th>Вакансия</th><th>Компания</th><th>Зарплата</th><th>Сайт</th><th>Фильтр</th><th>Отправлено</th></tr></thead>
       <tbody>
-        {% for sv, v, u in history %}
+        {% for sv, v, u, vf in history %}
         <tr>
           <td><a href="{{ v.url }}" target="_blank" rel="noopener">{{ v.title[:60] }}</a></td>
           <td>{{ v.company or '—' }}</td>
           <td>{{ v.salary_text or '—' }}</td>
           <td><span class="tag">{{ v.source }}</span></td>
+          <td>{{ vf.name if vf else '—' }}</td>
           <td>{{ sv.sent_at.strftime('%d.%m %H:%M') }}</td>
         </tr>
         {% endfor %}
@@ -284,7 +286,7 @@
 <div class="modal-overlay" id="editModal">
   <div class="modal">
     <button class="close" onclick="closeEdit()">✕</button>
-    <h2>✏️ Редактировать фильтр</h2>
+    <h2 id="modalTitle">✏️ Редактировать фильтр</h2>
     <div id="editForm"></div>
   </div>
 </div>
@@ -413,7 +415,44 @@
 
   function closeEdit() {
     document.getElementById('editModal').classList.remove('active');
+    document.getElementById('modalTitle').textContent = '✏️ Редактировать фильтр';
     editingFilterId = null;
+  }
+
+  function openCreate() {
+    editingFilterId = 'new';
+    document.getElementById('modalTitle').textContent = '➕ Создать фильтр';
+    let html = '<div class="form-group"><label>Название</label><input type="text" id="edit-name" value="Мой фильтр"></div>';
+    html += '<div class="form-group"><label>Ключевые слова</label>';
+    for (const [group, items] of Object.entries(KEYWORDS)) {
+      const groupItems = {};
+      for (const kw of items) groupItems[kw] = kw;
+      html += buildCheckboxGroup(group, groupItems, []);
+    }
+    html += '</div>';
+    html += '<div class="form-group"><label>Город</label><select id="edit-city"><option value="">Любой</option>';
+    for (const [key, label] of Object.entries(CITIES)) {
+      html += `<option value="${key}">${label}</option>`;
+    }
+    html += '</select></div>';
+    html += '<div class="form-group"><label>Зарплата</label><select id="edit-salary">';
+    html += '<option value="any">Любая</option>';
+    for (const s of SALARIES) {
+      html += `<option value="${s[0]}">${s[1]}</option>`;
+    }
+    html += '</select></div>';
+    html += '<div class="form-group"><label>Тип занятости</label>';
+    html += buildCheckboxGroup('empl', EMP_TYPES, []);
+    html += '</div>';
+    html += '<div class="form-group"><label>Сайты</label>';
+    html += buildCheckboxGroup('sites', SITE_LIST, ['hh', 'superjob', 'rabota', 'habr', 'trudvsem']);
+    html += '</div>';
+    html += '<div class="modal-actions">';
+    html += '<button class="btn btn-ghost" onclick="closeEdit()">Отмена</button>';
+    html += '<button class="btn btn-primary" onclick="saveEdit()">💾 Сохранить</button>';
+    html += '</div>';
+    document.getElementById('editForm').innerHTML = html;
+    document.getElementById('editModal').classList.add('active');
   }
 
   function getSelected(container) {
@@ -453,8 +492,10 @@
       employment_types: empTypes, sites
     };
 
-    const resp = await fetch(`/api/filters/${editingFilterId}`, {
-      method: 'PUT',
+    const url = editingFilterId === 'new' ? '/api/filters' : `/api/filters/${editingFilterId}`;
+    const method = editingFilterId === 'new' ? 'POST' : 'PUT';
+    const resp = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
