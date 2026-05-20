@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import os
 import logging
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
@@ -10,6 +11,10 @@ from core.database.repository import Database
 from core.scheduler import Scheduler
 from bot.dispatcher import setup_dispatcher
 from web.app import run_web
+
+# Clear proxy env vars — they interfere with aiogram and httpx
+for var in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+    os.environ.pop(var, None)
 
 logging.basicConfig(
     level=logging.INFO,
