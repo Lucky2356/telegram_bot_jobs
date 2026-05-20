@@ -6,6 +6,8 @@ class Settings(BaseSettings):
 
     BOT_TOKEN: str
     SUPERJOB_API_KEY: str = ""
+    HH_CLIENT_ID: str = ""
+    HH_CLIENT_SECRET: str = ""
     DATABASE_URL: str = "sqlite+aiosqlite:///./vacancies.db"
     WEB_HOST: str = "127.0.0.1"
     WEB_PORT: int = 8000

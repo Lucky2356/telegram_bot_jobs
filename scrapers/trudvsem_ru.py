@@ -1,5 +1,4 @@
 import httpx
-import xml.etree.ElementTree as ET
 from datetime import datetime
 from scrapers.base import BaseScraper, VacancyData
 
@@ -18,80 +17,91 @@ class TrudvsemScraper(BaseScraper):
         self, keywords: list[str], city: str | None = None
     ) -> list[VacancyData]:
         query = " ".join(keywords)
-        params: dict = {
-            "keyword": query,
-            "offset": 0,
-            "limit": 100,
-        }
+        params: dict = {"keyword": query, "offset": 0, "limit": 100}
 
         try:
             resp = await self.client.get(TRUDVSEM_API, params=params)
             resp.raise_for_status()
-            return self._parse_xml(resp.text, city)
+            data = resp.json()
         except Exception:
             return []
 
-    def _parse_xml(self, xml_text: str, city_filter: str | None) -> list[VacancyData]:
         results: list[VacancyData] = []
-        try:
-            root = ET.fromstring(xml_text)
-        except ET.ParseError:
-            return []
-
-        ns = {"": "http://opendata.trudvsem.ru/opendata/trudvsem"}
-        for vacancy_elem in root.iter("vacancy"):
+        vacancies = data.get("results", {}).get("vacancies", [])
+        for item in vacancies:
             try:
-                data = {}
-                for child in vacancy_elem:
-                    data[child.tag] = child.text or ""
-
-                city = data.get("location", "")
-                if city_filter and city_filter.lower() not in city.lower():
+                v = item.get("vacancy", {})
+                if not v.get("job-name"):
                     continue
 
+                city_name = None
+                region = v.get("region")
+                if region:
+                    city_name = region.get("name", "").replace("\n", " ").strip()
+
+                company_name = None
+                company = v.get("company")
+                if company:
+                    company_name = company.get("name", "").replace("\n", " ").strip()
+
                 salary_text = None
-                salary = data.get("salary", "")
-                if salary:
-                    salary_text = f"{salary} ₽"
-                salary_min = data.get("salary_min")
-                salary_max = data.get("salary_max")
-                if salary_min or salary_max:
+                salary_currency = v.get("currency", "RUB")
+                smin = v.get("salary_min")
+                smax = v.get("salary_max")
+                if smin or smax:
                     parts = []
-                    if salary_min:
-                        parts.append(f"от {salary_min}")
-                    if salary_max:
-                        parts.append(f"до {salary_max}")
-                    salary_text = " ".join(parts) + " ₽"
+                    if smin:
+                        parts.append(f"от {smin}")
+                    if smax:
+                        parts.append(f"до {smax}")
+                    salary_text = " ".join(parts) + f" {salary_currency}"
+                elif v.get("salary"):
+                    salary_text = f"{v['salary']} {salary_currency}"
 
                 emp_type = None
-                emp = data.get("employment", "")
+                emp = v.get("employment", "")
                 mapping = {
-                    "Полная занятость": "full",
-                    "Частичная": "part",
-                    "Дистанционная": "remote",
-                    "Вахтовый метод": "full",
-                    "Стажировка": "internship",
+                    "полная занятость": "full",
+                    "частичная": "part",
+                    "дистанционная": "remote",
+                    "удаленно": "remote",
+                    "удаленная": "remote",
+                    "вахтовый метод": "full",
+                    "стажировка": "internship",
                 }
-                emp_type = mapping.get(emp)
+                if emp:
+                    emp_lower = emp.lower()
+                    for key, val in mapping.items():
+                        if key in emp_lower:
+                            emp_type = val
+                            break
 
                 published = None
-                try:
-                    date_str = data.get("creation_date", "")
-                    if date_str:
+                date_str = v.get("creation-date", "")
+                if date_str:
+                    try:
                         published = datetime.fromisoformat(date_str)
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
+
+                desc_parts = filter(None, [
+                    v.get("duty", ""),
+                    v.get("requirements", ""),
+                ])
+                desc = " ".join(desc_parts).replace("\n", " ").strip()
+
+                vac_url = v.get("vac-url", "")
 
                 results.append(VacancyData(
                     source="trudvsem",
-                    source_id=data.get("id", data.get("vacancy_url", "")),
-                    title=data.get("job_name", ""),
-                    company=data.get("company_name", "").replace("\n", " ").strip(),
+                    source_id=v.get("id", vac_url or ""),
+                    title=v.get("job-name", ""),
+                    company=company_name,
                     salary_text=salary_text,
                     employment_type=emp_type,
-                    city=data.get("location", "").replace("\n", " ").strip(),
-                    description=data.get("duty", "").replace("\n", " ").strip(),
-                    url=data.get("vacancy_url", ""),
+                    city=city_name,
+                    description=desc,
+                    url=vac_url,
                     published_at=published,
                 ))
             except Exception:
