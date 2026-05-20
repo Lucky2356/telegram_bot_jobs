@@ -37,11 +37,53 @@ class FilterCallback(CallbackData, prefix="fw"):
     value: str = ""
 
 
-KEYWORDS_BY_GROUP: dict[str, list[str]] = {
-    "Языки": ["Python", "JavaScript", "TypeScript", "Go", "Java", "C++", "C#", "Rust", "PHP", "Ruby", "Kotlin", "Swift"],
-    "Роли": ["Backend", "Frontend", "Fullstack", "DevOps", "Data Science", "ML Engineer", "QA", "iOS", "Android", "Аналитик", "Дизайнер", "PM", "SysAdmin"],
-    "Сеньорити": ["Junior", "Middle", "Senior", "Lead"],
-    "Домен": ["Fintech", "E-commerce", "EdTech", "GameDev", "Маркетинг", "Медицина", "ERP"],
+KEYWORDS_BY_GROUP: dict[str, dict[str, list[str]]] = {
+    "Языки": {
+        "Python": ["Python"],
+        "JavaScript": ["JavaScript", "JS"],
+        "TypeScript": ["TypeScript", "TS"],
+        "Go": ["Go", "Golang"],
+        "Java": ["Java"],
+        "C++": ["C++"],
+        "C#": ["C#"],
+        "Rust": ["Rust"],
+        "PHP": ["PHP"],
+        "Ruby": ["Ruby"],
+        "Kotlin": ["Kotlin"],
+        "Swift": ["Swift"],
+        "1С": ["1С", "1C"],
+    },
+    "Роли": {
+        "Backend / Бэкенд": ["Backend", "Бэкенд", "Бекенд"],
+        "Frontend / Фронтенд": ["Frontend", "Фронтенд"],
+        "Fullstack": ["Fullstack", "Фуллстак", "Full Stack"],
+        "DevOps": ["DevOps", "ДевОпс"],
+        "Data Science": ["Data Science", "Data Scientist"],
+        "ML Engineer": ["ML", "Machine Learning"],
+        "iOS": ["iOS"],
+        "Android": ["Android"],
+        "Аналитик": ["Аналитик", "Analyst"],
+        "Дизайнер": ["Дизайнер", "UI/UX", "Designer"],
+        "PM": ["Project Manager", "PM", "ПМ"],
+        "QA / Тестировщик": ["QA", "Тестировщик", "Tester"],
+        "Системный администратор": ["SysAdmin", "Системный администратор", "СисАдмин", "System Administrator"],
+        "Специалист техподдержки": ["Support", "Техподдержка", "Tech Support"],
+    },
+    "Сеньорити": {
+        "Junior / Младший": ["Junior", "Джуниор", "Младший"],
+        "Middle / Средний": ["Middle", "Мидл", "Средний"],
+        "Senior / Старший": ["Senior", "Сеньор", "Старший"],
+        "Lead / Тимлид": ["Lead", "Лид", "Team Lead"],
+    },
+    "Домен": {
+        "Fintech": ["Fintech", "Финтех"],
+        "E-commerce": ["E-commerce", "Ecommerce"],
+        "EdTech": ["EdTech", "Образование"],
+        "GameDev": ["GameDev", "Геймдев"],
+        "Маркетинг": ["Маркетинг", "Marketing"],
+        "Медицина": ["Медицина", "Healthcare", "MedTech"],
+        "ERP / 1С": ["ERP", "SAP", "1С"],
+    },
 }
 
 CITIES: dict[str, str] = {
@@ -89,6 +131,22 @@ SITES: dict[str, str] = {
 }
 
 
+def get_synonyms(display_names: list[str]) -> list[str]:
+    """Convert display names to all search synonyms for API queries."""
+    all_syns: dict[str, list[str]] = {}
+    for group in KEYWORDS_BY_GROUP.values():
+        for display, syns in group.items():
+            all_syns[display] = syns
+
+    result: list[str] = []
+    for name in display_names:
+        if name in all_syns:
+            result.extend(all_syns[name])
+        else:
+            result.append(name)
+    return list(dict.fromkeys(result))
+
+
 def _btn(text: str, action: WizardAction, value: str = "") -> InlineKeyboardButton:
     return InlineKeyboardButton(
         text=text,
@@ -111,7 +169,7 @@ def _build_keyword_grid(
     title: str, back_action: WizardAction | None = None,
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    for group_name, keywords in KEYWORDS_BY_GROUP.items():
+    for group_name, kw_dict in KEYWORDS_BY_GROUP.items():
         builder.row(
             InlineKeyboardButton(
                 text=f"— {group_name} —",
@@ -119,14 +177,14 @@ def _build_keyword_grid(
             )
         )
         row_buttons = []
-        for kw in keywords:
-            text = f"🚫 {kw}" if kw in selected else kw
+        for display_name in kw_dict:
+            text = f"🚫 {display_name}" if display_name in selected else display_name
             if toggle_action == WizardAction.KEYWORD_TOGGLE:
-                text = f"✅ {kw}" if kw in selected else kw
+                text = f"✅ {display_name}" if display_name in selected else display_name
             row_buttons.append(
                 InlineKeyboardButton(
                     text=text,
-                    callback_data=FilterCallback(action=toggle_action, value=kw).pack(),
+                    callback_data=FilterCallback(action=toggle_action, value=display_name).pack(),
                 )
             )
         for i in range(0, len(row_buttons), 4):

@@ -9,7 +9,7 @@ from scrapers.rabota_ru import RabotaRuScraper
 from scrapers.habr_career import HabrCareerScraper
 from scrapers.base import VacancyData, BaseScraper
 from bot.messages import format_vacancy_card
-from bot.keyboards import build_vacancy_actions_keyboard, CITIES
+from bot.keyboards import build_vacancy_actions_keyboard, CITIES, get_synonyms
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +90,11 @@ class Scheduler:
             return
 
         keywords = vf.get_keywords()
+        search_terms = get_synonyms(keywords)
         city = vf.city
         sites = vf.get_sites()
         emp_types = vf.get_employment_types()
-        exclude_kw = vf.get_exclude_keywords()
+        exclude_kw = get_synonyms(vf.get_exclude_keywords())
         experience = vf.experience
 
         for site_key in sites:
@@ -101,7 +102,7 @@ class Scheduler:
             if not scraper:
                 continue
             try:
-                vacancies = await scraper.search(keywords=keywords, city=city)
+                vacancies = await scraper.search(keywords=search_terms, city=city)
             except Exception as e:
                 logger.warning("Scraper %s error: %s", site_key, e)
                 continue
@@ -109,7 +110,7 @@ class Scheduler:
             for vac_data in vacancies:
                 try:
                     await self._process_vacancy(
-                        vac_data, vf, user, keywords, emp_types, exclude_kw, experience,
+                        vac_data, vf, user, search_terms, emp_types, exclude_kw, experience,
                     )
                 except Exception as e:
                     logger.warning("Process vacancy error: %s", e)
