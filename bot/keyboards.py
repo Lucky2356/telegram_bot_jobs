@@ -132,16 +132,20 @@ SITES: dict[str, str] = {
 
 
 def get_synonyms(display_names: list[str]) -> list[str]:
-    """Convert display names to all search synonyms for API queries."""
-    all_syns: dict[str, list[str]] = {}
+    """Convert display names to all search synonyms for API queries.
+    Also matches any keyword to its synonym group (e.g., 'SysAdmin' -> all Russian forms)."""
+    lookup: dict[str, list[str]] = {}
     for group in KEYWORDS_BY_GROUP.values():
         for display, syns in group.items():
-            all_syns[display] = syns
+            lookup[display] = syns
+            for s in syns:
+                if s not in lookup:
+                    lookup[s] = syns
 
     result: list[str] = []
     for name in display_names:
-        if name in all_syns:
-            result.extend(all_syns[name])
+        if name in lookup:
+            result.extend(lookup[name])
         else:
             result.append(name)
     return list(dict.fromkeys(result))
