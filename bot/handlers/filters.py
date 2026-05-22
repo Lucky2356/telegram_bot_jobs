@@ -13,6 +13,7 @@ from bot.keyboards import (
     build_confirm_keyboard, build_start_keyboard,
     build_filters_list_keyboard,
     SALARIES, EXPERIENCE, EMPLOYMENT_TYPES, SITES,
+    _ID_KW,
 )
 from core.database.repository import Database
 
@@ -68,7 +69,8 @@ async def cmd_add_filter(message: Message, state: FSMContext):
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.KEYWORD_TOGGLE))
 async def on_keyword_toggle(callback: CallbackQuery, state: FSMContext):
-    kw = FilterCallback.unpack(callback.data).value
+    kw_id = FilterCallback.unpack(callback.data).value
+    kw = _ID_KW.get(kw_id, kw_id)
     data = await state.get_data()
     selected: list[str] = data.get("selected_keywords", [])
     if kw in selected:
@@ -113,7 +115,8 @@ async def on_keyword_done(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.EXCLUDE_TOGGLE))
 async def on_exclude_toggle(callback: CallbackQuery, state: FSMContext):
-    kw = FilterCallback.unpack(callback.data).value
+    kw_id = FilterCallback.unpack(callback.data).value
+    kw = _ID_KW.get(kw_id, kw_id)
     data = await state.get_data()
     excluded: list[str] = data.get("excluded_keywords", [])
     if kw in excluded:
@@ -141,16 +144,25 @@ async def on_exclude_done(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.CITY_SELECT))
 async def on_city_select(callback: CallbackQuery, state: FSMContext):
     value = FilterCallback.unpack(callback.data).value
-    if value == "__done__":
-        await on_city_done(callback, state)
+    if value == "__back__":
+        await state.set_state(FilterWizard.exclude_keywords)
+        data = await state.get_data()
+        excluded = data.get("excluded_keywords", [])
+        await _safe_edit(callback.message, text="Выбери слова, которые нужно ИСКЛЮЧИТЬ\n\n"
+            "Если хочешь исключить какие-то технологии или роли, отметь их.\n"
+            "Если нет — просто нажми «Далее».",
+            reply_markup=build_exclude_keywords_keyboard(excluded),
+        )
+        await callback.answer()
         return
-    await state.update_data(city=value if value != "any" else None)
-    await _safe_edit(callback.message, reply_markup=build_city_keyboard(value)
+    await state.update_data(city=None if value == "any" else value)
+    await _safe_edit(callback.message, reply_markup=build_city_keyboard(None if value == "any" else value)
     )
     await callback.answer()
 
 
-async def on_city_done(callback: CallbackQuery, state: FSMContext):
+@router.callback_query(FilterCallback.filter(F.action == WizardAction.CITY_DONE_SKIP))
+async def on_city_done_skip(callback: CallbackQuery, state: FSMContext):
     await state.set_state(FilterWizard.experience)
     data = await state.get_data()
     exp = data.get("experience", None)

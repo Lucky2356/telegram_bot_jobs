@@ -61,5 +61,8 @@ def format_vacancy_card(vac: VacancyData) -> str:
             clean = clean[:300].rsplit(" ", 1)[0] + "..."
         lines.append(f"📋 {clean}")
     source_label = SOURCE_LABELS.get(vac.source, vac.source)
-    lines.append(f"🔗 {source_label} · {vac.url}")
+    if vac.url:
+        lines.append(f"🔗 {source_label} · {vac.url}")
+    else:
+        lines.append(f"🔗 {source_label}")
     return "\n".join(lines)

@@ -37,54 +37,52 @@ class FilterCallback(CallbackData, prefix="fw"):
     value: str = ""
 
 
+_KW_ID: dict[str, str] = {}
+_ID_KW: dict[str, str] = {}
+
+
+def _build_kw_ids():
+    _KW_ID.clear()
+    _ID_KW.clear()
+    idx = 0
+    for group in KEYWORDS_BY_GROUP.values():
+        for display_name in group:
+            sid = f"k{idx}"
+            _KW_ID[display_name] = sid
+            _ID_KW[sid] = display_name
+            idx += 1
+
+
 KEYWORDS_BY_GROUP: dict[str, dict[str, list[str]]] = {
-    "Языки": {
-        "Python": ["Python"],
-        "JavaScript": ["JavaScript", "JS"],
-        "TypeScript": ["TypeScript", "TS"],
-        "Go": ["Go", "Golang"],
-        "Java": ["Java"],
-        "C++": ["C++"],
-        "C#": ["C#"],
-        "Rust": ["Rust"],
-        "PHP": ["PHP"],
-        "Ruby": ["Ruby"],
-        "Kotlin": ["Kotlin"],
-        "Swift": ["Swift"],
-        "1С": ["1С", "1C"],
-    },
-    "Роли": {
-        "Backend / Бэкенд": ["Backend", "Бэкенд", "Бекенд"],
-        "Frontend / Фронтенд": ["Frontend", "Фронтенд"],
-        "Fullstack": ["Fullstack", "Фуллстак", "Full Stack"],
-        "DevOps": ["DevOps", "ДевОпс"],
-        "Data Science": ["Data Science", "Data Scientist"],
-        "ML Engineer": ["ML", "Machine Learning"],
-        "iOS": ["iOS"],
-        "Android": ["Android"],
-        "Аналитик": ["Аналитик", "Analyst"],
-        "Дизайнер": ["Дизайнер", "UI/UX", "Designer"],
-        "PM": ["Project Manager", "PM", "ПМ"],
-        "QA / Тестировщик": ["QA", "Тестировщик", "Tester"],
-        "Системный администратор": ["SysAdmin", "Системный администратор", "СисАдмин", "System Administrator"],
-        "Специалист техподдержки": ["Support", "Техподдержка", "Tech Support"],
-    },
-    "Сеньорити": {
-        "Junior / Младший": ["Junior", "Джуниор", "Младший"],
-        "Middle / Средний": ["Middle", "Мидл", "Средний"],
-        "Senior / Старший": ["Senior", "Сеньор", "Старший"],
-        "Lead / Тимлид": ["Lead", "Лид", "Team Lead"],
-    },
-    "Домен": {
-        "Fintech": ["Fintech", "Финтех"],
-        "E-commerce": ["E-commerce", "Ecommerce"],
-        "EdTech": ["EdTech", "Образование"],
-        "GameDev": ["GameDev", "Геймдев"],
-        "Маркетинг": ["Маркетинг", "Marketing"],
-        "Медицина": ["Медицина", "Healthcare", "MedTech"],
-        "ERP / 1С": ["ERP", "SAP", "1С"],
+    "Информационные технологии": {
+        "Программист, разработчик": ["Программист", "Разработчик", "Developer", "Software Engineer"],
+        "Аналитик": ["Аналитик", "Analyst", "Системный аналитик"],
+        "BI-аналитик, аналитик данных": ["BI-аналитик", "BI Analyst", "Аналитик данных", "Data Analyst"],
+        "Бизнес-аналитик": ["Бизнес-аналитик", "Business Analyst"],
+        "Продуктовый аналитик": ["Продуктовый аналитик", "Product Analyst"],
+        "Руководитель отдела аналитики": ["Head of Analytics", "Руководитель аналитики"],
+        "DevOps-инженер": ["DevOps", "Девопс", "DevOps-инженер"],
+        "Дата-сайентист": ["Data Scientist", "Дата-сайентист"],
+        "Системный администратор": ["Системный администратор", "СисАдмин", "SysAdmin", "System Administrator"],
+        "Системный инженер": ["Системный инженер", "System Engineer"],
+        "Сетевой инженер": ["Сетевой инженер", "Network Engineer"],
+        "Специалист по информационной безопасности": ["InfoSec", "Кибербезопасность", "Информационная безопасность", "Information Security"],
+        "Специалист технической поддержки": ["Техподдержка", "Tech Support", "Support", "Техническая поддержка"],
+        "Тестировщик": ["QA", "Тестировщик", "Tester", "QA Engineer", "Тестирование"],
+        "Технический писатель": ["Технический писатель", "Technical Writer", "Tech Writer"],
+        "Менеджер продукта": ["Product Manager", "PM", "Продукт менеджер", "Менеджер продукта"],
+        "Руководитель группы разработки": ["Team Lead", "Тимлид", "Tech Lead", "Engineering Manager", "Руководитель разработки"],
+        "Руководитель проектов": ["Project Manager", "Project Manager"],
+        "Технический директор (CTO)": ["CTO", "Технический директор", "Technical Director"],
+        "Директор по информационным технологиям (CIO)": ["CIO", "IT Director", "Директор по ИТ"],
+        "Дизайнер, художник": ["Дизайнер", "Designer", "UI/UX", "Web Designer"],
+        "Арт-директор, креативный директор": ["Арт-директор", "Art Director", "Креативный директор"],
+        "Гейм-дизайнер": ["Game Designer", "Гейм-дизайнер", "GameDev"],
+        "Методолог": ["Методолог", "Methodologist"],
     },
 }
+
+_build_kw_ids()
 
 CITIES: dict[str, str] = {
     "moscow": "Москва",
@@ -188,7 +186,7 @@ def _build_keyword_grid(
             row_buttons.append(
                 InlineKeyboardButton(
                     text=text,
-                    callback_data=FilterCallback(action=toggle_action, value=display_name).pack(),
+                    callback_data=FilterCallback(action=toggle_action, value=_KW_ID.get(display_name, display_name)).pack(),
                 )
             )
         for i in range(0, len(row_buttons), 4):
@@ -229,10 +227,11 @@ def build_city_keyboard(selected: str | None) -> InlineKeyboardMarkup:
         )
     for i in range(0, len(row_buttons), 3):
         builder.row(*row_buttons[i:i + 3])
-    builder.row(_btn("🌍 Любой (все города)", WizardAction.CITY_SELECT, value="any"))
+    is_any = selected is None
+    builder.row(_btn("🌍 Любой (все города)" if not is_any else "✅ Любой (все города)", WizardAction.CITY_SELECT, value="any"))
     builder.row(
-        _btn("⬅️ Назад", WizardAction.EXCLUDE_DONE),
-        _btn("✅ Далее →", WizardAction.EXPERIENCE_DONE, value="__done__"),
+        _btn("⬅️ Назад", WizardAction.EXCLUDE_DONE, value="__back__"),
+        _btn("✅ Далее →", WizardAction.CITY_DONE_SKIP, value="__done__"),
     )
     builder.row(_btn("❌ Отмена", WizardAction.CANCEL))
     return builder.as_markup()
@@ -249,8 +248,8 @@ def build_experience_keyboard(selected: str | None) -> InlineKeyboardMarkup:
             )
         )
     builder.row(
-        _btn("⬅️ Назад", WizardAction.CITY_SELECT, value="__back__"),
-        _btn("✅ Далее →", WizardAction.EXPERIENCE_DONE, value="__done__"),
+        _btn("⬅️ Назад", WizardAction.EXPERIENCE_SELECT, value="__back__"),
+        _btn("✅ Далее →", WizardAction.EXPERIENCE_SELECT, value="__done__"),
     )
     builder.row(_btn("❌ Отмена", WizardAction.CANCEL))
     return builder.as_markup()
@@ -267,8 +266,8 @@ def build_salary_keyboard(selected_key: str | None) -> InlineKeyboardMarkup:
             )
         )
     builder.row(
-        _btn("⬅️ Назад", WizardAction.EXPERIENCE_DONE, value="__back__"),
-        _btn("✅ Далее →", WizardAction.EMPLOYMENT_DONE, value="__done__"),
+        _btn("⬅️ Назад", WizardAction.SALARY_SELECT, value="__back__"),
+        _btn("✅ Далее →", WizardAction.SALARY_SELECT, value="__done__"),
     )
     builder.row(_btn("❌ Отмена", WizardAction.CANCEL))
     return builder.as_markup()
@@ -285,7 +284,7 @@ def build_employment_keyboard(selected: list[str]) -> InlineKeyboardMarkup:
             )
         )
     builder.row(
-        _btn("⬅️ Назад", WizardAction.SALARY_SELECT, value="__back__"),
+        _btn("⬅️ Назад", WizardAction.EMPLOYMENT_DONE, value="__back__"),
         _btn("✅ Далее →", WizardAction.EMPLOYMENT_DONE, value="__done__"),
     )
     builder.row(_btn("❌ Отмена", WizardAction.CANCEL))
@@ -303,7 +302,7 @@ def build_sites_keyboard(selected: list[str]) -> InlineKeyboardMarkup:
             )
         )
     builder.row(
-        _btn("⬅️ Назад", WizardAction.EMPLOYMENT_DONE, value="__back__"),
+        _btn("⬅️ Назад", WizardAction.SITE_DONE, value="__back__"),
         _btn("✅ Готово!", WizardAction.SITE_DONE, value="__done__"),
     )
     builder.row(_btn("❌ Отмена", WizardAction.CANCEL))
@@ -340,12 +339,13 @@ def build_vacancy_actions_keyboard(
     vacancy_id: int, source: str, url: str,
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(text="🔗 Открыть", url=url),
-    )
+    if url:
+        builder.row(
+            InlineKeyboardButton(text="🔗 Открыть", url=url),
+        )
     builder.row(
         _btn("📌 Отложить", WizardAction.VAC_SAVE, str(vacancy_id)),
-        _btn("🚫 Не интересует", WizardAction.VAC_BLOCK, f"{vacancy_id}:{source}"),
+        _btn("🚫 Не интересует", WizardAction.VAC_BLOCK, f"{vacancy_id}|{source}"),
         _btn("🔍 Похожие", WizardAction.VAC_SIMILAR, str(vacancy_id)),
     )
     return builder.as_markup()

@@ -1,6 +1,7 @@
 import httpx
 from datetime import datetime
 from scrapers.base import BaseScraper, VacancyData
+from bot.keyboards import CITIES
 
 
 TRUDVSEM_API = "https://opendata.trudvsem.ru/api/v1/vacancies"
@@ -19,6 +20,8 @@ class TrudvsemScraper(BaseScraper):
 
         for page in range(1):
             params: dict = {"keyword": query, "offset": page * 100, "limit": 100}
+            if city:
+                params["region"] = CITIES.get(city, city)
             try:
                 resp = await self.client.get(TRUDVSEM_API, params=params)
                 resp.raise_for_status()

@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from bot.keyboards import (
     FilterCallback, WizardAction,
     build_filters_list_keyboard, build_start_keyboard,
-    build_filter_detail_keyboard, EMPLOYMENT_TYPES, SITES, SALARIES, EXPERIENCE,
+    build_filter_detail_keyboard, EMPLOYMENT_TYPES, SITES, EXPERIENCE,
 )
 from core.database.repository import Database
 from core.scheduler import Scheduler

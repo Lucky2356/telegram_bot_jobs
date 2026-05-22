@@ -119,10 +119,8 @@ class Database:
             vf.salary_max = salary_max
             vf.set_employment_types(employment_types)
             vf.set_sites(sites)
-            if exclude_keywords is not None:
-                vf.set_exclude_keywords(exclude_keywords)
-            if experience is not None:
-                vf.experience = experience
+            vf.set_exclude_keywords(exclude_keywords or [])
+            vf.experience = experience
             await session.commit()
             await session.refresh(vf)
             return vf

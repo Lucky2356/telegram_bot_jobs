@@ -3,9 +3,6 @@ from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
 from bot.keyboards import (
     FilterCallback, WizardAction,
-    build_vacancy_actions_keyboard, build_start_keyboard,
-    build_keywords_keyboard, build_exclude_keywords_keyboard,
-    SALARIES, EMPLOYMENT_TYPES, SITES,
 )
 from bot.handlers.filters import FilterWizard
 from core.database.repository import Database
@@ -24,7 +21,7 @@ async def on_vacancy_save(callback: CallbackQuery, db: Database):
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.VAC_BLOCK))
 async def on_vacancy_block(callback: CallbackQuery, db: Database):
     value = FilterCallback.unpack(callback.data).value
-    parts = value.split(":", 1)
+    parts = value.split("|", 1)
     if len(parts) != 2:
         await callback.answer("Ошибка")
         return
@@ -32,7 +29,6 @@ async def on_vacancy_block(callback: CallbackQuery, db: Database):
     user = await db.get_or_create_user(callback.from_user.id)
     from core.database.models import Vacancy
     from sqlalchemy import select
-    from core.database.repository import async_sessionmaker
     async with db.session_factory() as session:
         result = await session.execute(select(Vacancy).where(Vacancy.id == vacancy_id))
         vac = result.scalar_one_or_none()

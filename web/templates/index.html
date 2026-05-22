@@ -362,6 +362,17 @@
     return html + '</div>';
   }
 
+  function buildExcludeGroup(groupName, selected) {
+    let html = `<div class="checkbox-group" data-group="${groupName}">`;
+    for (const [group, items] of Object.entries(KEYWORDS)) {
+      for (const kw of Object.keys(items)) {
+        const isSel = selected.includes(kw);
+        html += `<label class="${isSel ? 'active' : ''}"><input type="checkbox" value="${kw}" ${isSel ? 'checked' : ''} onchange="this.parentElement.classList.toggle('active', this.checked)">${kw}</label>`;
+      }
+    }
+    return html + '</div>';
+  }
+
   async function openEdit(id) {
     editingFilterId = id;
     const resp = await fetch(`/api/filters/${id}`);
@@ -404,6 +415,17 @@
     html += '<div class="form-group"><label>Сайты</label>';
     html += buildCheckboxGroup('sites', SITE_LIST, f.sites);
     html += '</div>';
+
+    html += '<div class="form-group"><label>Исключить ключевые слова</label>';
+    html += buildExcludeGroup('exclude', f.exclude_keywords || []);
+    html += '</div>';
+
+    html += '<div class="form-group"><label>Опыт работы</label><select id="edit-experience">';
+    html += '<option value="">Любой</option>';
+    for (const [key, label] of Object.entries({'no':'Без опыта','1-3':'1–3 года','3-6':'3–6 лет','6+':'Более 6 лет'})) {
+      html += `<option value="${key}" ${f.experience === key ? 'selected' : ''}>${label}</option>`;
+    }
+    html += '</select></div>';
 
     html += '<div class="modal-actions">';
     html += '<button class="btn btn-ghost" onclick="closeEdit()">Отмена</button>';
@@ -448,6 +470,18 @@
     html += '<div class="form-group"><label>Сайты</label>';
     html += buildCheckboxGroup('sites', SITE_LIST, ['hh', 'superjob', 'rabota', 'habr', 'trudvsem']);
     html += '</div>';
+
+    html += '<div class="form-group"><label>Исключить ключевые слова</label>';
+    html += buildExcludeGroup('exclude', []);
+    html += '</div>';
+
+    html += '<div class="form-group"><label>Опыт работы</label><select id="edit-experience">';
+    html += '<option value="">Любой</option>';
+    for (const [key, label] of Object.entries({'no':'Без опыта','1-3':'1–3 года','3-6':'3–6 лет','6+':'Более 6 лет'})) {
+      html += `<option value="${key}">${label}</option>`;
+    }
+    html += '</select></div>';
+
     html += '<div class="modal-actions">';
     html += '<button class="btn btn-ghost" onclick="closeEdit()">Отмена</button>';
     html += '<button class="btn btn-primary" onclick="saveEdit()">💾 Сохранить</button>';
@@ -465,14 +499,11 @@
     const name = document.getElementById('edit-name').value.trim();
     if (!name) { alert('Введите название'); return; }
 
-    const keywords = getSelected(document.querySelector('#editForm [data-group="Языки"]').parentElement);
-    const roles = getSelected(document.querySelector('#editForm [data-group="Роли"]').parentElement);
-    const seniorities = getSelected(document.querySelector('#editForm [data-group="Сеньорити"]').parentElement);
-    const domains = getSelected(document.querySelector('#editForm [data-group="Домен"]').parentElement);
-    const allKeywords = [...keywords, ...roles, ...seniorities, ...domains];
+    const allKeywords = Array.from(document.querySelectorAll('#editForm .checkbox-group:not([data-group="empl"]):not([data-group="sites"])')).flatMap(g => getSelected(g));
 
     const empTypes = getSelected(document.querySelector('#editForm [data-group="empl"]').parentElement);
     const sites = getSelected(document.querySelector('#editForm [data-group="sites"]').parentElement);
+    const excludeKws = getSelected(document.querySelector('#editForm [data-group="exclude"]'));
 
     if (!allKeywords.length) { alert('Выберите хотя бы одно ключевое слово'); return; }
     if (!sites.length) { alert('Выберите хотя бы один сайт'); return; }
@@ -486,11 +517,13 @@
       }
     }
     const cityVal = document.getElementById('edit-city').value || null;
+    const experienceVal = document.getElementById('edit-experience').value || null;
 
     const body = {
       name, keywords: allKeywords, city: cityVal,
       salary_min: salaryMin, salary_max: salaryMax,
-      employment_types: empTypes, sites
+      employment_types: empTypes, sites,
+      exclude_keywords: excludeKws, experience: experienceVal,
     };
 
     const url = editingFilterId === 'new' ? '/api/filters' : `/api/filters/${editingFilterId}`;

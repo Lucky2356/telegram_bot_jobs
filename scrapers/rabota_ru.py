@@ -1,7 +1,9 @@
+import re
 import httpx
 from datetime import datetime
 from bs4 import BeautifulSoup
 from scrapers.base import BaseScraper, VacancyData
+from bot.keyboards import CITIES
 
 
 RABOTA_URL = "https://www.rabota.ru/vacancy/search"
@@ -21,7 +23,7 @@ class RabotaRuScraper(BaseScraper):
         for page in range(1):
             params: dict = {"query": query}
             if city:
-                params["city"] = city
+                params["city"] = CITIES.get(city, city)
             params["page"] = page
             try:
                 resp = await self.client.get(RABOTA_URL, params=params)

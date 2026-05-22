@@ -14,15 +14,12 @@ from bot.keyboards import build_vacancy_actions_keyboard, CITIES, get_synonyms
 logger = logging.getLogger(__name__)
 
 
-MAX_DIGEST_LENGTH = 3500
-
-
 class Scheduler:
     def __init__(self, db: Database, bot: Bot):
         self.db = db
         self.bot = bot
         self._scrapers: dict[str, BaseScraper] = {}
-        self._user_buffers: dict[int, list[str]] = {}
+        self._user_buffers: dict[int, list[tuple[int, str, str, str]]] = {}
         self._lock = asyncio.Lock()
 
     def _get_scraper(self, site: str) -> BaseScraper | None:
@@ -62,24 +59,33 @@ class Scheduler:
             for vf in filters:
                 await self._check_filter(vf)
 
-            for user_id, vacancies in self._user_buffers.items():
-                if not vacancies:
+            for user_id, items in self._user_buffers.items():
+                if not items:
                     continue
-                header = f"🔍 <b>Найдено {len(vacancies)} новых вакансий</b>\n\n"
-                body = "\n\n".join(vacancies)
+                user = await self.db.get_user(user_id)
+                if not user:
+                    continue
+                header = f"🔍 <b>Найдено {len(items)} новых вакансий</b>"
                 try:
-                    user = await self.db.get_user(user_id)
-                    if user:
-                        full_text = header + body
-                        for i in range(0, len(full_text), MAX_DIGEST_LENGTH):
-                            chunk = full_text[i:i + MAX_DIGEST_LENGTH]
-                            await self.bot.send_message(
-                                chat_id=user.telegram_id,
-                                text=chunk,
-                                disable_web_page_preview=True,
-                            )
+                    await self.bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=header,
+                    )
                 except Exception as e:
-                    logger.warning("Failed to send digest: %s", e)
+                    logger.warning("Failed to send header: %s", e)
+                for vac_id, source, url, card in items:
+                    try:
+                        if len(card) > 4000:
+                            card = card[:4000].rsplit(" ", 1)[0] + "..."
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=card,
+                            reply_markup=build_vacancy_actions_keyboard(vac_id, source, url),
+                            disable_web_page_preview=True,
+                        )
+                        await asyncio.sleep(0.5)
+                    except Exception as e:
+                        logger.warning("Failed to send vacancy %s: %s", vac_id, e)
 
             self._user_buffers.clear()
             logger.info("Vacancy check completed.")
@@ -102,7 +108,7 @@ class Scheduler:
             if not scraper:
                 continue
             try:
-                vacancies = await scraper.search(keywords=search_terms, city=city)
+                vacancies = await scraper.search(keywords=keywords, city=city)
             except Exception as e:
                 logger.warning("Scraper %s error: %s", site_key, e)
                 continue
@@ -149,11 +155,9 @@ class Scheduler:
         if await self.db.is_blocked(user.id, vac_data.company, vac_data.title):
             return
 
-        card = format_vacancy_card(vac_data) + "\n\n⚡"
+        card = format_vacancy_card(vac_data)
         try:
-            if user.id not in self._user_buffers:
-                self._user_buffers[user.id] = []
-            self._user_buffers[user.id].append(card)
+            self._user_buffers.setdefault(user.id, []).append((vac.id, vac_data.source, vac_data.url, card))
             await self.db.mark_sent(user.id, vac.id, filter_id=vf.id)
             logger.info("Buffered vacancy %s for user %s", vac_data.title[:50], user.telegram_id)
         except Exception as e:

@@ -3,6 +3,7 @@ import re
 from datetime import datetime
 from bs4 import BeautifulSoup
 from scrapers.base import BaseScraper, VacancyData
+from bot.keyboards import CITIES
 
 
 HABR_URL = "https://career.habr.com/vacancies"
@@ -24,7 +25,7 @@ class HabrCareerScraper(BaseScraper):
         for page in range(3):
             params: dict = {"q": query, "type": "all", "page": page}
             if city:
-                params["city"] = city
+                params["city"] = CITIES.get(city, city)
             try:
                 resp = await self.client.get(HABR_URL, params=params)
                 resp.raise_for_status()
@@ -57,7 +58,7 @@ class HabrCareerScraper(BaseScraper):
                 if not href.startswith("http"):
                     href = "https://career.habr.com" + href
 
-                source_id = href.split("/")[-1] or href.split("/")[-2] if href else href
+                source_id = (href.split("/")[-1] or href.split("/")[-2]).split("?")[0] if href else href
 
                 title = ""
                 title_el = card.select_one("[class*=title]")

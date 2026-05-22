@@ -26,7 +26,13 @@ async def _get_first_user(db: Database):
     from sqlalchemy import select as sa_select
     from core.database.models import User as UserModel
     async with db.session_factory() as session:
-        return (await session.execute(sa_select(UserModel))).scalar_one_or_none()
+        user = (await session.execute(sa_select(UserModel))).scalar_one_or_none()
+        if user is None:
+            user = UserModel(telegram_id=0, username="web_user")
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+        return user
 
 
 def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
@@ -36,7 +42,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     async def dashboard(request: Request):
         filters = await db.get_all_active_filters()
-        history = await db.get_recent_sent(limit=30)
+        history = await db.get_recent_sent(limit=50)
         return templates.TemplateResponse(
             request, "index.html",
             {
@@ -74,6 +80,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             "salary_max": vf.salary_max,
             "employment_types": vf.get_employment_types(),
             "sites": vf.get_sites(),
+            "exclude_keywords": vf.get_exclude_keywords(),
+            "experience": vf.experience,
             "active": vf.active,
         }}
 
@@ -90,6 +98,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
                 "salary_max": vf.salary_max,
                 "employment_types": vf.get_employment_types(),
                 "sites": vf.get_sites(),
+                "exclude_keywords": vf.get_exclude_keywords(),
+                "experience": vf.experience,
                 "active": vf.active,
             }
             for vf in filters
@@ -109,6 +119,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             "salary_max": vf.salary_max,
             "employment_types": vf.get_employment_types(),
             "sites": vf.get_sites(),
+            "exclude_keywords": vf.get_exclude_keywords(),
+            "experience": vf.experience,
             "active": vf.active,
         }
 
@@ -137,6 +149,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             "salary_max": vf.salary_max,
             "employment_types": vf.get_employment_types(),
             "sites": vf.get_sites(),
+            "exclude_keywords": vf.get_exclude_keywords(),
+            "experience": vf.experience,
             "active": vf.active,
         }}
 
