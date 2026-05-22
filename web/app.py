@@ -15,6 +15,11 @@ from bot.keyboards import EMPLOYMENT_TYPES, SITES, KEYWORDS_BY_GROUP, CITIES, SA
 REACT_BUILD_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
 
+class BlocklistAdd(BaseModel):
+    pattern: str
+    type: str = "company"
+
+
 class FilterUpdate(BaseModel):
     name: str
     keywords: list[str]
@@ -213,6 +218,38 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
         active = await db.toggle_filter(filter_id)
         return {"ok": True, "active": active}
 
+    @app.post("/api/filters/{filter_id}/clone")
+    async def api_clone_filter(filter_id: int):
+        vf = await db.get_filter(filter_id)
+        if vf is None:
+            return {"ok": False, "message": "Filter not found"}, 404
+        user = await _get_first_user(db)
+        cloned = await db.create_filter(
+            user_id=user.id,
+            name=f"Копия — {vf.name}",
+            keywords=vf.get_keywords(),
+            city=vf.city,
+            salary_min=vf.salary_min,
+            salary_max=vf.salary_max,
+            employment_types=vf.get_employment_types(),
+            sites=vf.get_sites(),
+            exclude_keywords=vf.get_exclude_keywords(),
+            experience=vf.experience,
+        )
+        return {"ok": True, "filter": {
+            "id": cloned.id,
+            "name": cloned.name,
+            "keywords": cloned.get_keywords(),
+            "city": cloned.city,
+            "salary_min": cloned.salary_min,
+            "salary_max": cloned.salary_max,
+            "employment_types": cloned.get_employment_types(),
+            "sites": cloned.get_sites(),
+            "exclude_keywords": cloned.get_exclude_keywords(),
+            "experience": cloned.experience,
+            "active": cloned.active,
+        }}
+
     @app.delete("/api/filters/{filter_id}")
     async def api_delete(filter_id: int):
         await db.delete_filter(filter_id)
@@ -262,11 +299,45 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.post("/api/blocklist/{block_id}/delete")
     async def api_blocklist_delete(block_id: int):
-        async with db.session_factory() as session:
-            from sqlalchemy import delete as sa_delete
-            from core.database.models import Blocklist as BlockModel
-            await session.execute(sa_delete(BlockModel).where(BlockModel.id == block_id))
-            await session.commit()
+        await db.remove_blocklist_by_id(block_id)
+        return {"ok": True}
+
+    @app.post("/api/blocklist/add")
+    async def api_blocklist_add(data: BlocklistAdd):
+        user = await _get_first_user(db)
+        await db.add_blocklist(user.id, data.pattern, data.type)
+        return {"ok": True}
+
+    @app.post("/api/vacancies/{vacancy_id}/save")
+    async def api_vacancy_save(vacancy_id: int):
+        user = await _get_first_user(db)
+        vac = await db.get_vacancy_by_id(vacancy_id)
+        if not vac:
+            return {"ok": False, "message": "Vacancy not found"}, 404
+        await db.save_vacancy(user.id, vacancy_id)
+        return {"ok": True}
+
+    @app.post("/api/vacancies/{vacancy_id}/unsave")
+    async def api_vacancy_unsave(vacancy_id: int):
+        user = await _get_first_user(db)
+        await db.unsave_vacancy(user.id, vacancy_id)
+        return {"ok": True}
+
+    @app.post("/api/vacancies/{vacancy_id}/block")
+    async def api_vacancy_block(vacancy_id: int):
+        user = await _get_first_user(db)
+        vac = await db.get_vacancy_by_id(vacancy_id)
+        if not vac:
+            return {"ok": False, "message": "Vacancy not found"}, 404
+        if vac.company:
+            await db.add_blocklist(user.id, vac.company, "company")
+        return {"ok": True}
+
+    @app.delete("/api/saved/{saved_id}")
+    async def api_saved_delete(saved_id: int):
+        sv = await db.get_saved_vacancy_by_id(saved_id)
+        if sv:
+            await db.unsave_vacancy(sv.user_id, sv.vacancy_id)
         return {"ok": True}
 
     @app.get("/api/status")
@@ -292,6 +363,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
         return {
             "items": [
                 {
+                    "id": v.id,
                     "title": v.title, "company": v.company, "salary_text": v.salary_text,
                     "city": v.city, "employment_type": v.employment_type,
                     "experience": v.experience, "description": v.description,

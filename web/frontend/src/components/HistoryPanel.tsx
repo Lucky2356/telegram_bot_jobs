@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import type { HistoryItem, AppConfig } from '../types'
 import { api } from '../api'
 import { toast } from './Toast'
@@ -46,6 +46,7 @@ export default function HistoryPanel({ config }: HistoryPanelProps) {
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
 
   const fetchPage = useCallback(async (p: number) => {
     setLoading(true)
@@ -92,6 +93,22 @@ export default function HistoryPanel({ config }: HistoryPanelProps) {
       fetchPage(1)
     }
   }, [])
+
+  useEffect(() => {
+    if (!hasMore || loading) return
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          fetchPage(page + 1)
+        }
+      },
+      { rootMargin: '200px' },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMore, loading, page, fetchPage])
 
   if (items.length === 0 && loading) {
     return (
@@ -190,17 +207,10 @@ export default function HistoryPanel({ config }: HistoryPanelProps) {
         ))}
       </div>
 
-      {/* Load more */}
+      {/* Infinite scroll sentinel */}
       {hasMore && (
-        <div className="text-center mt-6">
-          <button
-            onClick={() => fetchPage(page + 1)}
-            disabled={loading}
-            className="px-6 py-2.5 text-sm font-medium text-primary border border-primary/30 rounded-xl hover:bg-primary hover:text-white transition-all disabled:opacity-50 cursor-pointer"
-            aria-label="Загрузить ещё"
-          >
-            {loading ? '⏳ Загрузка...' : '📥 Загрузить ещё'}
-          </button>
+        <div ref={sentinelRef} className="text-center mt-6">
+          {loading && <span className="text-sm text-slate-400">⏳ Загрузка...</span>}
         </div>
       )}
     </div>

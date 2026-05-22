@@ -31,6 +31,9 @@ export const api = {
   deleteFilter: (id: number): Promise<{ ok: boolean }> =>
     request(`${BASE}/filters/${id}`, { method: 'DELETE' }),
 
+  cloneFilter: (id: number): Promise<{ ok: boolean; filter: VacancyFilter }> =>
+    request(`${BASE}/filters/${id}/clone`, { method: 'POST' }),
+
   toggleFilter: (id: number): Promise<{ ok: boolean; active: boolean }> =>
     request(`${BASE}/filters/${id}/toggle`, { method: 'POST' }),
 
@@ -55,4 +58,19 @@ export const api = {
     request(`${BASE}/blocklist/${id}/delete`, { method: 'POST' }),
 
   getStatus: (): Promise<ParserStatus> => request(`${BASE}/status`),
+
+  saveVacancy: (vacancyId: number): Promise<{ ok: boolean }> =>
+    request(`${BASE}/vacancies/${vacancyId}/save`, { method: 'POST' }),
+
+  unsaveVacancy: (vacancyId: number): Promise<{ ok: boolean }> =>
+    request(`${BASE}/vacancies/${vacancyId}/unsave`, { method: 'POST' }),
+
+  blockVacancy: (vacancyId: number): Promise<{ ok: boolean }> =>
+    request(`${BASE}/vacancies/${vacancyId}/block`, { method: 'POST' }),
+
+  deleteSaved: (savedId: number): Promise<{ ok: boolean }> =>
+    request(`${BASE}/saved/${savedId}`, { method: 'DELETE' }),
+
+  addBlocklist: (pattern: string, type: string = 'company'): Promise<{ ok: boolean }> =>
+    request(`${BASE}/blocklist/add`, { method: 'POST', body: JSON.stringify({ pattern, type }) }),
 }

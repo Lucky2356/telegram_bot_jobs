@@ -26,12 +26,14 @@ class Scheduler:
 
     def get_last_results(self) -> list[dict]:
         """Return cached results from the last check as serializable dicts."""
-        combined: list[VacancyData] = []
+        combined: list[tuple[int, str | None, VacancyData]] = []
         for items in self.last_results.values():
             combined.extend(items)
         from datetime import datetime, timezone
         return [
             {
+                "id": vac_id,
+                "filter_name": filter_name,
                 "title": v.title,
                 "company": v.company,
                 "salary_text": v.salary_text,
@@ -43,7 +45,7 @@ class Scheduler:
                 "source": v.source,
                 "published_at": v.published_at.isoformat() if v.published_at else None,
             }
-            for v in combined
+            for vac_id, filter_name, v in combined
         ]
 
     def _get_scraper(self, site: str) -> BaseScraper | None:
@@ -212,7 +214,7 @@ class Scheduler:
         card = format_vacancy_card(vac_data)
         try:
             self._user_buffers.setdefault(user.id, []).append((vac.id, vac_data.source, vac_data.url, card))
-            self.last_results.setdefault(user.id, []).append(vac_data)
+            self.last_results.setdefault(user.id, []).append((vac.id, vf.name, vac_data))
             await self.db.mark_sent(user.id, vac.id, filter_id=vf.id)
             logger.info("Buffered vacancy %s for user %s", vac_data.title[:50], user.telegram_id)
         except Exception as e:

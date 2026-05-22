@@ -1,11 +1,24 @@
 import type { SavedVacancy, AppConfig } from '../types'
+import { api } from '../api'
+import { toast } from './Toast'
 
 interface SavedPanelProps {
   saved: SavedVacancy[]
   config: AppConfig
+  onRefresh: () => void
 }
 
-export default function SavedPanel({ saved, config }: SavedPanelProps) {
+export default function SavedPanel({ saved, config, onRefresh }: SavedPanelProps) {
+  const handleDelete = async (id: number) => {
+    try {
+      await api.deleteSaved(id)
+      toast.success('Удалено из избранного')
+      onRefresh()
+    } catch {
+      toast.error('Ошибка')
+    }
+  }
+
   if (saved.length === 0) {
     return (
       <div className="text-center py-12 text-gray-400">
@@ -45,6 +58,13 @@ export default function SavedPanel({ saved, config }: SavedPanelProps) {
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1 shrink-0">
+                <button
+                  onClick={(e) => { e.preventDefault(); handleDelete(v.id) }}
+                  className="text-[10px] text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                  aria-label="Удалить из избранного"
+                >
+                  ✕
+                </button>
                 <span className="px-2 py-0.5 text-[10px] rounded-md bg-gray-100 dark:bg-gray-700 text-gray-500">
                   {config.sites[v.source] || v.source}
                 </span>

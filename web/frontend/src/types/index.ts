@@ -33,6 +33,7 @@ export interface AppConfig {
 }
 
 export interface VacancyResult {
+  id: number; filter_name?: string | null
   title: string; company: string | null; salary_text: string | null
   city: string | null; employment_type: string | null
   experience: string | null; description: string | null

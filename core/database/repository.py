@@ -284,6 +284,35 @@ class Database:
             result = await session.execute(select(Blocklist).order_by(Blocklist.type, Blocklist.pattern))
             return list(result.scalars().all())
 
+    async def get_vacancy_by_id(self, vacancy_id: int) -> Vacancy | None:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(Vacancy).where(Vacancy.id == vacancy_id)
+            )
+            return result.scalar_one_or_none()
+
+    async def unsave_vacancy(self, user_id: int, vacancy_id: int):
+        async with self.session_factory() as session:
+            await session.execute(
+                delete(SavedVacancy).where(
+                    SavedVacancy.user_id == user_id,
+                    SavedVacancy.vacancy_id == vacancy_id,
+                )
+            )
+            await session.commit()
+
+    async def get_saved_vacancy_by_id(self, saved_id: int) -> SavedVacancy | None:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(SavedVacancy).where(SavedVacancy.id == saved_id)
+            )
+            return result.scalar_one_or_none()
+
+    async def remove_blocklist_by_id(self, block_id: int):
+        async with self.session_factory() as session:
+            await session.execute(delete(Blocklist).where(Blocklist.id == block_id))
+            await session.commit()
+
     async def cleanup_old_vacancies(self, days: int = 7):
         from datetime import datetime, timezone, timedelta
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)

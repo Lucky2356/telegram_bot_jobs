@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import type { VacancyFilter, AppConfig } from '../types'
 import { api } from '../api'
 import { toast } from './Toast'
 import FilterModal from './FilterModal'
+import ConfirmModal from './ConfirmModal'
 
 interface FiltersPanelProps {
   filters: VacancyFilter[]
@@ -15,6 +16,13 @@ interface FiltersPanelProps {
 export default function FiltersPanel({ filters, config, selectedId, onSelect, onRefresh }: FiltersPanelProps) {
   const [editFilter, setEditFilter] = useState<VacancyFilter | null>(null)
   const [checkingId, setCheckingId] = useState<number | null>(null)
+  const [search, setSearch] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+
+  const filtered = useMemo(
+    () => search ? filters.filter((f) => f.name.toLowerCase().includes(search.toLowerCase())) : filters,
+    [filters, search],
+  )
 
   const handleToggle = async (id: number) => {
     try {
@@ -34,14 +42,14 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
     finally { setCheckingId(null) }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Удалить фильтр?')) return
+  const handleClone = async (id: number) => {
     try {
-      await api.deleteFilter(id)
-      toast.success('Фильтр удалён')
-      if (selectedId === id) onSelect(null)
+      await api.cloneFilter(id)
+      toast.success('Фильтр склонирован')
       onRefresh()
-    } catch { toast.error('Ошибка удаления') }
+    } catch {
+      toast.error('Ошибка клонирования')
+    }
   }
 
   if (filters.length === 0) {
@@ -54,6 +62,16 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
 
   return (
     <>
+      {filters.length > 5 && (
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="🔍 Поиск фильтров..."
+          className="w-full mb-2 px-3 py-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-xl bg-white/70 dark:bg-slate-800/70 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+          aria-label="Поиск фильтров"
+        />
+      )}
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => onSelect(null)}
@@ -65,7 +83,7 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
         >
           Все
         </button>
-        {filters.map((f) => (
+        {filtered.map((f) => (
           <div
             key={f.id}
             className={`group relative flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
@@ -104,6 +122,13 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
                 {f.active ? '⏸' : '▶️'}
               </button>
               <button
+                onClick={(e) => { e.stopPropagation(); handleClone(f.id) }}
+                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-gray-700 text-gray-500 hover:text-primary cursor-pointer shadow-sm border border-gray-200 dark:border-gray-600"
+                aria-label="Клонировать"
+              >
+                📋
+              </button>
+              <button
                 onClick={(e) => { e.stopPropagation(); setEditFilter(f) }}
                 className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-gray-700 text-gray-500 hover:text-primary cursor-pointer shadow-sm border border-gray-200 dark:border-gray-600"
                 aria-label="Редактировать"
@@ -111,7 +136,7 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
                 ✏️
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); handleDelete(f.id) }}
+                onClick={(e) => { e.stopPropagation(); setDeleteConfirm(f.id) }}
                 className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-gray-700 text-gray-500 hover:text-red-500 cursor-pointer shadow-sm border border-gray-200 dark:border-gray-600"
                 aria-label="Удалить"
               >
@@ -125,6 +150,26 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
       {editFilter && (
         <FilterModal config={config} filter={editFilter} onClose={() => setEditFilter(null)} onSaved={onRefresh} />
       )}
+
+      <ConfirmModal
+        open={deleteConfirm !== null}
+        title="Удалить фильтр?"
+        message="Это действие нельзя отменить."
+        confirmLabel="Удалить"
+        danger
+        onConfirm={async () => {
+          if (deleteConfirm !== null) {
+            try {
+              await api.deleteFilter(deleteConfirm)
+              toast.success('Фильтр удалён')
+              if (selectedId === deleteConfirm) onSelect(null)
+              onRefresh()
+            } catch { toast.error('Ошибка удаления') }
+          }
+          setDeleteConfirm(null)
+        }}
+        onCancel={() => setDeleteConfirm(null)}
+      />
     </>
   )
 }

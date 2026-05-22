@@ -1,5 +1,7 @@
 import { useState, memo } from 'react'
 import type { VacancyResult, AppConfig } from '../types'
+import { api } from '../api'
+import { toast } from './Toast'
 
 interface VacancyCardProps {
   vacancy: VacancyResult
@@ -17,6 +19,8 @@ const sourceStyles: Record<string, { label: string; color: string; stripe: strin
 
 const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = true }: VacancyCardProps) {
   const [expanded, setExpanded] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [blocking, setBlocking] = useState(false)
   const src = vacancy.source ? sourceStyles[vacancy.source] : null
 
   const empLabel = vacancy.employment_type
@@ -35,6 +39,32 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
         return new Date(vacancy.published_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
       })()
     : null
+
+  const handleSave = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      await api.saveVacancy(vacancy.id)
+      toast.success('✅ Вакансия сохранена')
+    } catch {
+      toast.error('Ошибка сохранения')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleBlock = async () => {
+    if (blocking) return
+    setBlocking(true)
+    try {
+      await api.blockVacancy(vacancy.id)
+      toast.success('🚫 Компания добавлена в блок-лист')
+    } catch {
+      toast.error('Ошибка')
+    } finally {
+      setBlocking(false)
+    }
+  }
 
   const descTruncated = (vacancy.description?.length ?? 0) > 180
   const desc = expanded && vacancy.description ? vacancy.description
@@ -57,11 +87,18 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 flex-1">
             {vacancy.title}
           </h3>
-          {src && (
-            <span className={`shrink-0 px-2.5 py-1 text-[10px] font-semibold rounded-lg ${src.color}`}>
-              {src.label}
-            </span>
-          )}
+          <div className="shrink-0 flex flex-col items-end gap-1">
+            {vacancy.filter_name && (
+              <span className="px-2 py-0.5 text-[10px] font-medium rounded-lg bg-primary/10 text-primary">
+                📋 {vacancy.filter_name}
+              </span>
+            )}
+            {src && (
+              <span className={`px-2.5 py-1 text-[10px] font-semibold rounded-lg ${src.color}`}>
+                {src.label}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Company + City + Time */}
@@ -123,16 +160,20 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
               🔗 Открыть
             </a>
             <button
-              className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700/60 hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-500 dark:text-slate-400 transition-all cursor-pointer"
+              onClick={handleSave}
+              disabled={saving}
+              className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700/60 hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-500 dark:text-slate-400 transition-all cursor-pointer disabled:opacity-50"
               aria-label="Сохранить"
             >
-              📌
+              {saving ? '⏳' : '📌'}
             </button>
             <button
-              className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700/60 hover:bg-red-50 dark:hover:bg-red-900/10 text-slate-400 hover:text-red-500 transition-all cursor-pointer"
+              onClick={handleBlock}
+              disabled={blocking}
+              className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700/60 hover:bg-red-50 dark:hover:bg-red-900/10 text-slate-400 hover:text-red-500 transition-all cursor-pointer disabled:opacity-50"
               aria-label="Не интересует"
             >
-              🚫
+              {blocking ? '⏳' : '🚫'}
             </button>
           </div>
         )}
