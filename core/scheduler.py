@@ -68,6 +68,28 @@ class Scheduler:
                 pass
         self._scrapers.clear()
 
+    async def run_check_for_filter(self, filter_id: int):
+        """Check only one specific filter and cache results without sending to Telegram."""
+        if self._lock.locked():
+            logger.info("Check already running, skipping.")
+            return
+        async with self._lock:
+            from datetime import datetime, timezone
+            self._user_buffers.clear()
+            self.last_results.clear()
+            self.last_results_time = datetime.now(timezone.utc).isoformat()
+            logger.info("Starting single-filter check for filter %s...", filter_id)
+            vf = await self.db.get_filter(filter_id)
+            if not vf or not vf.active:
+                logger.info("Filter %s not found or inactive.", filter_id)
+                return
+            user = await self.db.get_user(vf.user_id)
+            if not user:
+                return
+            await self._check_filter(vf)
+            self._user_buffers.clear()
+            logger.info("Single-filter check completed.")
+
     async def run_check(self):
         if self._lock.locked():
             logger.info("Check already running, skipping.")

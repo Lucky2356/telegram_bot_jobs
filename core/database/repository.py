@@ -269,6 +269,21 @@ class Database:
             )
             return [{"date": str(row[0]), "count": row[1]} for row in result.all()]
 
+    async def get_saved_vacancies(self) -> list[tuple[SavedVacancy, Vacancy]]:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(SavedVacancy, Vacancy)
+                .join(Vacancy, SavedVacancy.vacancy_id == Vacancy.id)
+                .order_by(SavedVacancy.saved_at.desc())
+                .limit(50)
+            )
+            return list(result.all())
+
+    async def get_blocklist(self) -> list[Blocklist]:
+        async with self.session_factory() as session:
+            result = await session.execute(select(Blocklist).order_by(Blocklist.type, Blocklist.pattern))
+            return list(result.scalars().all())
+
     async def get_recent_sent(self, limit: int = 20) -> list[tuple[SentVacancy, Vacancy, User, VacancyFilter | None]]:
         async with self.session_factory() as session:
             stmt = (

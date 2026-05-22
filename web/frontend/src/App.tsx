@@ -1,27 +1,34 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { VacancyFilter, Stats, AppConfig, VacancyResult } from './types'
+import type { VacancyFilter, Stats, AppConfig, VacancyResult, SavedVacancy, BlocklistItem, ParserStatus } from './types'
 import { api } from './api'
 import Tabs from './components/Tabs'
 import FiltersPanel from './components/FiltersPanel'
 import ResultsPanel from './components/ResultsPanel'
 import HistoryPanel from './components/HistoryPanel'
 import StatsPanel from './components/StatsPanel'
+import SavedPanel from './components/SavedPanel'
+import BlocklistPanel from './components/BlocklistPanel'
+import StatusBar from './components/StatusBar'
 import FilterModal from './components/FilterModal'
 import Toast, { toast } from './components/Toast'
 
 const TABS = [
   { key: 'search', label: '🔍 Поиск' },
   { key: 'history', label: '📨 История' },
+  { key: 'saved', label: '📁 Избранное' },
   { key: 'stats', label: '📊 Статистика' },
 ]
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null)
+  const [status, setStatus] = useState<ParserStatus | null>(null)
   const [filters, setFilters] = useState<VacancyFilter[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [results, setResults] = useState<VacancyResult[]>([])
   const [checkedAt, setCheckedAt] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
+  const [saved, setSaved] = useState<SavedVacancy[]>([])
+  const [blocklist, setBlocklist] = useState<BlocklistItem[]>([])
   const [activeTab, setActiveTab] = useState('search')
   const [selectedFilterId, setSelectedFilterId] = useState<number | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
@@ -42,6 +49,10 @@ export default function App() {
     try { setConfig(await api.getConfig()) } catch { console.error('config fail') }
   }, [])
 
+  const fetchStatus = useCallback(async () => {
+    try { setStatus(await api.getStatus()) } catch { /* ignore */ }
+  }, [])
+
   const fetchFilters = useCallback(async () => {
     try { setFilters(await api.getFilters()) } catch { toast.error('Ошибка загрузки фильтров') }
   }, [])
@@ -59,12 +70,21 @@ export default function App() {
     } catch { toast.error('Ошибка загрузки результатов') }
   }, [])
 
-  useEffect(() => { fetchConfig() }, [fetchConfig])
+  const fetchSaved = useCallback(async () => {
+    try { setSaved(await api.getSaved()) } catch { toast.error('Ошибка загрузки избранного') }
+  }, [])
+
+  const fetchBlocklist = useCallback(async () => {
+    try { setBlocklist(await api.getBlocklist()) } catch { toast.error('Ошибка загрузки блок-листа') }
+  }, [])
+
+  useEffect(() => { fetchConfig(); fetchStatus() }, [fetchConfig, fetchStatus])
 
   useEffect(() => {
     if (activeTab === 'search') { fetchFilters(); fetchResults() }
+    else if (activeTab === 'saved') { fetchSaved(); fetchBlocklist() }
     else if (activeTab === 'stats') fetchStats()
-  }, [activeTab, fetchFilters, fetchResults, fetchStats])
+  }, [activeTab, fetchFilters, fetchResults, fetchSaved, fetchBlocklist, fetchStats])
 
   const [checkingNow, setCheckingNow] = useState(false)
 
@@ -83,27 +103,20 @@ export default function App() {
     fetchFilters()
     fetchResults()
     fetchStats()
-  }, [fetchFilters, fetchResults, fetchStats])
-
-  const filteredResults = selectedFilterId
-    ? results
-    : results
+    fetchSaved()
+    fetchBlocklist()
+  }, [fetchFilters, fetchResults, fetchStats, fetchSaved, fetchBlocklist])
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="max-w-6xl mx-auto px-4 py-5">
-        {/* Header bar */}
-        <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-              🔍 Job Bot
-            </h1>
-          </div>
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-2">
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">🔍 Job Bot</h1>
           <div className="flex items-center gap-2">
             <button
               onClick={() => { setCreateOpen(true); setSelectedFilterId(null) }}
               className="px-3 py-1.5 text-xs font-medium border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
-              aria-label="Создать фильтр"
             >
               ➕ Фильтр
             </button>
@@ -117,13 +130,15 @@ export default function App() {
           </div>
         </div>
 
+        {/* Status bar */}
+        <StatusBar status={status} />
+
         {/* Tabs */}
         <Tabs tabs={TABS} active={activeTab} onTabChange={setActiveTab} />
 
-        {/* Filters + Results (merged) */}
+        {/* Search tab */}
         {activeTab === 'search' && config && (
           <div className="space-y-4">
-            {/* Filter selector bar */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-3.5">
               <FiltersPanel
                 filters={filters}
@@ -134,29 +149,25 @@ export default function App() {
               />
             </div>
 
-            {/* Check button inline */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleCheckNow}
                 disabled={checkingNow}
                 className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 transition-all cursor-pointer shadow-sm"
-                aria-label="Проверить вакансии"
               >
                 {checkingNow || checking ? '⏳ Проверка...' : '🔍 Проверить сейчас'}
               </button>
               <button
                 onClick={fetchResults}
                 className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
-                aria-label="Обновить результаты"
               >
                 🔄 Обновить
               </button>
             </div>
 
-            {/* Results */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
               <ResultsPanel
-                results={filteredResults}
+                results={results}
                 config={config}
                 checkedAt={checkedAt}
                 checking={checking}
@@ -168,22 +179,32 @@ export default function App() {
           </div>
         )}
 
-        {/* History tab */}
+        {/* History */}
         {activeTab === 'history' && config && (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <HistoryPanel config={config} />
           </div>
         )}
 
-        {/* Stats tab */}
-        {activeTab === 'stats' && stats && (
-          <StatsPanel stats={stats} />
+        {/* Saved tab */}
+        {activeTab === 'saved' && config && (
+          <div className="space-y-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">📌 Сохранённые вакансии</h2>
+              <SavedPanel saved={saved} config={config} />
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">🚫 Блок-лист</h2>
+              <BlocklistPanel items={blocklist} onRefresh={fetchBlocklist} />
+            </div>
+          </div>
         )}
 
+        {/* Stats */}
+        {activeTab === 'stats' && stats && <StatsPanel stats={stats} />}
+
         {!config && (
-          <div className="text-center py-20 text-gray-400">
-            <p>Загрузка...</p>
-          </div>
+          <div className="text-center py-20 text-gray-400"><p>Загрузка...</p></div>
         )}
       </div>
 

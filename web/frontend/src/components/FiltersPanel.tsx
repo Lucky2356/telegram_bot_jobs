@@ -14,43 +14,47 @@ interface FiltersPanelProps {
 
 export default function FiltersPanel({ filters, config, selectedId, onSelect, onRefresh }: FiltersPanelProps) {
   const [editFilter, setEditFilter] = useState<VacancyFilter | null>(null)
-  const [createOpen, setCreateOpen] = useState(false)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+  const [checkingId, setCheckingId] = useState<number | null>(null)
 
   const handleToggle = async (id: number) => {
     try {
       const res = await api.toggleFilter(id)
       toast.success(res.active ? 'Фильтр включён' : 'Фильтр на паузе')
       onRefresh()
-    } catch {
-      toast.error('Ошибка')
-    }
+    } catch { toast.error('Ошибка') }
+  }
+
+  const handleCheckOne = async (id: number) => {
+    setCheckingId(id)
+    try {
+      await api.checkFilter(id)
+      toast.success('Проверка запущена!')
+      setTimeout(() => onRefresh(), 2000)
+    } catch { toast.error('Ошибка') }
+    finally { setCheckingId(null) }
   }
 
   const handleDelete = async (id: number) => {
+    if (!confirm('Удалить фильтр?')) return
     try {
       await api.deleteFilter(id)
       toast.success('Фильтр удалён')
       if (selectedId === id) onSelect(null)
       onRefresh()
-    } catch {
-      toast.error('Ошибка удаления')
-    }
+    } catch { toast.error('Ошибка удаления') }
   }
 
   if (filters.length === 0) {
     return (
-      <div className="text-center py-10 text-gray-500 dark:text-gray-400">
-        <p className="text-base mb-1">Фильтров пока нет</p>
-        <p className="text-sm">Создайте в Telegram через /add_filter</p>
+      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+        <p className="text-sm">Фильтров пока нет</p>
       </div>
     )
   }
 
   return (
     <>
-      {/* Active filter chips row */}
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={() => onSelect(null)}
           className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
@@ -58,19 +62,18 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
               ? 'bg-primary text-white border-primary shadow-sm'
               : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary'
           }`}
-          aria-label="Показать все фильтры"
         >
-          Все фильтры
+          Все
         </button>
         {filters.map((f) => (
           <div
             key={f.id}
-            className={`group relative flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
+            className={`group relative flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
               selectedId === f.id
                 ? 'bg-primary text-white border-primary shadow-sm'
                 : f.active
                   ? 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-primary'
-                  : 'bg-gray-50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700 hover:border-gray-400'
+                  : 'bg-gray-50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700'
             }`}
             onClick={() => onSelect(f.id)}
             role="tab"
@@ -80,54 +83,47 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
           >
             <span className={`w-1.5 h-1.5 rounded-full ${f.active ? 'bg-emerald-400' : 'bg-gray-300 dark:bg-gray-600'}`} />
             <span className={!f.active ? 'line-through' : ''}>{f.name}</span>
-            <span className="text-[10px] opacity-60 ml-0.5">
-              {f.keywords.length} кл.
-            </span>
-            {/* Quick actions on hover */}
-            <div className="hidden group-hover:flex absolute -top-2 -right-2 gap-0.5">
+
+            {/* Quick actions */}
+            <div className="hidden group-hover:flex items-center gap-0.5 ml-1">
+              {f.active && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleCheckOne(f.id) }}
+                  disabled={checkingId === f.id}
+                  className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-gray-700 text-gray-500 hover:text-emerald-500 cursor-pointer shadow-sm border border-gray-200 dark:border-gray-600"
+                  aria-label={`Проверить фильтр ${f.name}`}
+                >
+                  {checkingId === f.id ? '⏳' : '▶'}
+                </button>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); handleToggle(f.id) }}
-                className="w-5 h-5 flex items-center justify-center text-[10px] rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-primary cursor-pointer shadow-sm"
+                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-gray-700 text-gray-500 hover:text-primary cursor-pointer shadow-sm border border-gray-200 dark:border-gray-600"
                 aria-label={f.active ? 'Выключить' : 'Включить'}
               >
                 {f.active ? '⏸' : '▶️'}
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setEditFilter(f) }}
-                className="w-5 h-5 flex items-center justify-center text-[10px] rounded-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-500 hover:text-primary cursor-pointer shadow-sm"
+                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-gray-700 text-gray-500 hover:text-primary cursor-pointer shadow-sm border border-gray-200 dark:border-gray-600"
                 aria-label="Редактировать"
               >
                 ✏️
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDelete(f.id) }}
+                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-gray-700 text-gray-500 hover:text-red-500 cursor-pointer shadow-sm border border-gray-200 dark:border-gray-600"
+                aria-label="Удалить"
+              >
+                🗑
               </button>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Confirm delete */}
-      {confirmDeleteId && (
-        <div className="flex items-center gap-2 mb-3 p-3 bg-red-50 dark:bg-red-900/10 rounded-lg border border-red-200 dark:border-red-800">
-          <span className="text-sm text-red-700 dark:text-red-300">Удалить фильтр?</span>
-          <button
-            onClick={() => { handleDelete(confirmDeleteId); setConfirmDeleteId(null) }}
-            className="px-3 py-1 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 cursor-pointer"
-          >
-            Да, удалить
-          </button>
-          <button
-            onClick={() => setConfirmDeleteId(null)}
-            className="px-3 py-1 text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
-          >
-            Отмена
-          </button>
-        </div>
-      )}
-
       {editFilter && (
         <FilterModal config={config} filter={editFilter} onClose={() => setEditFilter(null)} onSaved={onRefresh} />
-      )}
-      {createOpen && (
-        <FilterModal config={config} filter={null} onClose={() => setCreateOpen(false)} onSaved={onRefresh} />
       )}
     </>
   )

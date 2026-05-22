@@ -225,6 +225,61 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             return {"ok": True, "message": "Проверка запущена!"}
         return {"ok": False, "message": "Scheduler not available"}
 
+    @app.post("/api/filters/{filter_id}/check")
+    async def api_check_filter(filter_id: int):
+        if scheduler:
+            asyncio.create_task(scheduler.run_check_for_filter(filter_id))
+            return {"ok": True, "message": "Проверка фильтра запущена!"}
+        return {"ok": False, "message": "Scheduler not available"}
+
+    @app.get("/api/saved")
+    async def api_saved():
+        saved = await db.get_saved_vacancies()
+        return [
+            {
+                "id": sv.id,
+                "vacancy_title": v.title,
+                "company": v.company,
+                "salary_text": v.salary_text,
+                "city": v.city,
+                "employment_type": v.employment_type,
+                "description": v.description,
+                "url": v.url,
+                "source": v.source,
+                "published_at": v.published_at.isoformat() if v.published_at else None,
+                "saved_at": sv.saved_at.isoformat() if sv.saved_at else None,
+            }
+            for sv, v in saved
+        ]
+
+    @app.get("/api/blocklist")
+    async def api_blocklist():
+        blocks = await db.get_blocklist()
+        return [
+            {"id": b.id, "pattern": b.pattern, "type": b.type}
+            for b in blocks
+        ]
+
+    @app.post("/api/blocklist/{block_id}/delete")
+    async def api_blocklist_delete(block_id: int):
+        async with db.session_factory() as session:
+            from sqlalchemy import delete as sa_delete
+            from core.database.models import Blocklist as BlockModel
+            await session.execute(sa_delete(BlockModel).where(BlockModel.id == block_id))
+            await session.commit()
+        return {"ok": True}
+
+    @app.get("/api/status")
+    async def api_status():
+        from core.config import settings as app_settings
+        return {
+            "hh": bool(app_settings.HH_CLIENT_ID and app_settings.HH_CLIENT_SECRET),
+            "superjob": bool(app_settings.SUPERJOB_API_KEY),
+            "trudvsem": True,
+            "rabota": True,
+            "habr": True,
+        }
+
     @app.get("/api/results")
     async def api_results():
         if scheduler:

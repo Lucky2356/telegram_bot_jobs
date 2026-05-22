@@ -1,5 +1,6 @@
 import type {
   VacancyFilter, FilterFormData, AppConfig, ResultsResponse, HistoryResponse, Stats,
+  SavedVacancy, BlocklistItem, ParserStatus,
 } from '../types'
 
 const BASE = '/api'
@@ -33,6 +34,9 @@ export const api = {
   toggleFilter: (id: number): Promise<{ ok: boolean; active: boolean }> =>
     request(`${BASE}/filters/${id}/toggle`, { method: 'POST' }),
 
+  checkFilter: (id: number): Promise<{ ok: boolean; message: string }> =>
+    request(`${BASE}/filters/${id}/check`, { method: 'POST' }),
+
   getHistory: (page = 1, limit = 20): Promise<HistoryResponse> =>
     request(`${BASE}/history?page=${page}&limit=${limit}`),
 
@@ -42,4 +46,13 @@ export const api = {
     request(`${BASE}/check_now`, { method: 'POST' }),
 
   getResults: (): Promise<ResultsResponse> => request(`${BASE}/results`),
+
+  getSaved: (): Promise<SavedVacancy[]> => request(`${BASE}/saved`),
+
+  getBlocklist: (): Promise<BlocklistItem[]> => request(`${BASE}/blocklist`),
+
+  deleteBlocklist: (id: number): Promise<{ ok: boolean }> =>
+    request(`${BASE}/blocklist/${id}/delete`, { method: 'POST' }),
+
+  getStatus: (): Promise<ParserStatus> => request(`${BASE}/status`),
 }
