@@ -1,0 +1,16 @@
+services:
+  bot:
+    build: .
+    container_name: telegram-job-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./data/vacancies.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - bot_data:/app/data
+
+volumes:
+  bot_data:

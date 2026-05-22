@@ -28,8 +28,17 @@ async def main():
     sys.stdout.reconfigure(encoding="utf-8")
     print("=== Job Bot Starting ===", flush=True)
     db = Database(settings.DATABASE_URL)
-    await db.create_tables()
-    logger.info("Database initialized")
+    try:
+        from alembic.config import Config
+        from alembic import command
+        alembic_cfg = Config("alembic.ini")
+        alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations applied")
+    except Exception as e:
+        logger.warning("Alembic migration failed (%s), using create_tables fallback", e)
+        await db.create_tables()
+        logger.info("Database initialized via create_tables")
 
     bot = Bot(
         token=settings.BOT_TOKEN,

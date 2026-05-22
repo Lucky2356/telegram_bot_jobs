@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     WEB_HOST: str = "127.0.0.1"
     WEB_PORT: int = 8000
     CHECK_INTERVAL_HOURS: int = 1
-    WEB_PASSWORD: str = ""
+    WEB_PASSWORD: str = "F65Hei812QF!"
 
 
 settings = Settings()
