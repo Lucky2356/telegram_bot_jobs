@@ -220,6 +220,48 @@ class Database:
                 session.add(SavedVacancy(user_id=user_id, vacancy_id=vacancy_id))
                 await session.commit()
 
+    async def get_active_filter_count(self) -> int:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(func.count(VacancyFilter.id)).where(VacancyFilter.active == True)
+            )
+            return result.scalar() or 0
+
+    async def get_total_vacancy_count(self) -> int:
+        async with self.session_factory() as session:
+            result = await session.execute(select(func.count(Vacancy.id)))
+            return result.scalar() or 0
+
+    async def get_total_sent_count(self) -> int:
+        async with self.session_factory() as session:
+            result = await session.execute(select(func.count(SentVacancy.id)))
+            return result.scalar() or 0
+
+    async def get_sent_by_source(self) -> dict[str, int]:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(Vacancy.source, func.count(Vacancy.id))
+                .select_from(SentVacancy)
+                .join(Vacancy, SentVacancy.vacancy_id == Vacancy.id)
+                .group_by(Vacancy.source)
+            )
+            return dict(result.all())
+
+    async def get_sent_by_day(self, days: int = 30) -> list[dict]:
+        async with self.session_factory() as session:
+            from datetime import datetime, timezone, timedelta
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            result = await session.execute(
+                select(
+                    func.date(SentVacancy.sent_at).label("date"),
+                    func.count(SentVacancy.id).label("count"),
+                )
+                .where(SentVacancy.sent_at >= cutoff)
+                .group_by(func.date(SentVacancy.sent_at))
+                .order_by("date")
+            )
+            return [{"date": str(row[0]), "count": row[1]} for row in result.all()]
+
     async def get_recent_sent(self, limit: int = 20) -> list[tuple[SentVacancy, Vacancy, User, VacancyFilter | None]]:
         async with self.session_factory() as session:
             stmt = (

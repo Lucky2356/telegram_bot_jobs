@@ -10,6 +10,9 @@ vacancies.db
 vacancies.db-journal
 debug.db
 
+# Node
+node_modules/
+
 # IDE
 .idea/
 .vscode/

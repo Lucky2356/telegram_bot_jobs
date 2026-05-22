@@ -35,8 +35,18 @@ python main.py
 
 ## Веб
 
-FastAPI без отдельного процесса — `uvicorn.Server.serve()` внутри `asyncio.gather`. Шаблон: `web/templates/index.html`.
+FastAPI без отдельного процесса — `uvicorn.Server.serve()` внутри `asyncio.gather`.
 При старте создаёт `web_user` (telegram_id=0), если нет пользователей.
+
+Фронтенд: **Vite + React + TypeScript + TailwindCSS + Chart.js**.
+- Исходники: `web/frontend/src/`
+- Сборка: `cd web/frontend && npm run build` → `dist/`
+- FastAPI раздаёт `dist/` через `StaticFiles`. Dev-режим: `npm run dev` (прокси `/api/*` → FastAPI)
+- Все стили — Tailwind-классы (без кастомного CSS, кроме Tailwind config в `index.css`)
+- `index.css`: `@import "tailwindcss"`, `@custom-variant dark`, `@theme` для кастомных цветов
+- JS: React + TypeScript, Fetch API, `const fn = () => {}`, без `;`
+- Компоненты: папка `src/components/`, экспорт `default`
+- Коммиты: `feat(web): ...`, `fix(web): ...`
 
 ## Фильтр-мастер (FSM)
 

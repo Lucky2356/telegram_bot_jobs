@@ -1,13 +1,18 @@
 import asyncio
+import os
 import uvicorn
 from pydantic import BaseModel
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from core.config import settings
 from core.database.repository import Database
 from core.scheduler import Scheduler
-from bot.keyboards import EMPLOYMENT_TYPES, SITES, KEYWORDS_BY_GROUP, CITIES, SALARIES
+from bot.keyboards import EMPLOYMENT_TYPES, SITES, KEYWORDS_BY_GROUP, CITIES, SALARIES, EXPERIENCE
+
+
+REACT_BUILD_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
 
 class FilterUpdate(BaseModel):
@@ -35,26 +40,75 @@ async def _get_first_user(db: Database):
         return user
 
 
+async def _serve_react_or_fallback(app: FastAPI, request: Request, templates: Jinja2Templates):
+    """Serve React build if available, otherwise fallback to Jinja2 template."""
+    index_path = os.path.join(REACT_BUILD_DIR, "index.html")
+    if os.path.isfile(index_path):
+        return FileResponse(index_path)
+    # Fallback to old Jinja2 template
+    filters = await app.state.db.get_all_active_filters()
+    history = await app.state.db.get_recent_sent(limit=50)
+    return templates.TemplateResponse(
+        request, "index.html",
+        {
+            "filters": filters,
+            "history": history,
+            "employment_types": EMPLOYMENT_TYPES,
+            "sites": SITES,
+            "keyword_groups": KEYWORDS_BY_GROUP,
+            "cities": CITIES,
+            "salaries": SALARIES,
+        },
+    )
+
+
 def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     app = FastAPI(title="Job Bot Dashboard")
+    app.state.db = db
     templates = Jinja2Templates(directory="web/templates")
+
+    # Mount React static assets if build exists
+    assets_dir = os.path.join(REACT_BUILD_DIR, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard(request: Request):
-        filters = await db.get_all_active_filters()
-        history = await db.get_recent_sent(limit=50)
-        return templates.TemplateResponse(
-            request, "index.html",
-            {
-                "filters": filters,
-                "history": history,
-                "employment_types": EMPLOYMENT_TYPES,
-                "sites": SITES,
-                "keyword_groups": KEYWORDS_BY_GROUP,
-                "cities": CITIES,
-                "salaries": SALARIES,
-            },
+        return await _serve_react_or_fallback(app, request, templates)
+
+    @app.get("/api/config")
+    async def api_config():
+        return {
+            "employment_types": EMPLOYMENT_TYPES,
+            "sites": SITES,
+            "cities": CITIES,
+            "experiences": EXPERIENCE,
+            "salaries": SALARIES,
+            "keyword_groups": KEYWORDS_BY_GROUP,
+        }
+
+    @app.get("/api/stats")
+    async def api_stats():
+        total_filters = await db.get_filter_count()
+        active_filters = await db.get_active_filter_count()
+        total_vacancies = await db.get_total_vacancy_count()
+        total_sent = await db.get_total_sent_count()
+        sent_by_source = await db.get_sent_by_source()
+        sent_by_day = await db.get_sent_by_day(30)
+        sent_last_7d = sum(
+            d["count"] for d in await db.get_sent_by_day(7)
         )
+        sent_last_30d = sum(d["count"] for d in sent_by_day)
+        return {
+            "total_filters": total_filters,
+            "active_filters": active_filters,
+            "total_vacancies": total_vacancies,
+            "total_sent": total_sent,
+            "sent_by_source": sent_by_source,
+            "sent_by_day": sent_by_day,
+            "sent_last_7d": sent_last_7d,
+            "sent_last_30d": sent_last_30d,
+        }
 
     @app.post("/api/filters")
     async def api_create_filter(data: FilterUpdate):
@@ -168,7 +222,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     async def api_check_now():
         if scheduler:
             asyncio.create_task(scheduler.run_check())
-            return {"ok": True, "message": "Check started"}
+            return {"ok": True, "message": "Проверка запущена!"}
         return {"ok": False, "message": "Scheduler not available"}
 
     @app.get("/api/history")
