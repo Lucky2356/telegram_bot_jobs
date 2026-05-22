@@ -284,6 +284,13 @@ class Database:
             result = await session.execute(select(Blocklist).order_by(Blocklist.type, Blocklist.pattern))
             return list(result.scalars().all())
 
+    async def get_recent_vacancies(self, limit: int = 50) -> list[Vacancy]:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(Vacancy).order_by(Vacancy.created_at.desc()).limit(limit)
+            )
+            return list(result.scalars().all())
+
     async def get_recent_sent(self, limit: int = 20) -> list[tuple[SentVacancy, Vacancy, User, VacancyFilter | None]]:
         async with self.session_factory() as session:
             stmt = (
