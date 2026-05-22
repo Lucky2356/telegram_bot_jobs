@@ -67,4 +67,16 @@ export interface VacancyResult {
   published_at: string | null
 }
 
+export interface ResultsResponse {
+  items: VacancyResult[]
+  checked_at: string | null
+  checking: boolean
+}
+
+export interface HistoryResponse {
+  items: HistoryItem[]
+  page: number
+  has_more: boolean
+}
+
 export type SalaryTuple = [string, string, number | null, number | null]

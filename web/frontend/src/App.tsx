@@ -1,18 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { VacancyFilter, HistoryItem, Stats, AppConfig, VacancyResult } from './types'
+import type { VacancyFilter, Stats, AppConfig, VacancyResult } from './types'
 import { api } from './api'
 import Tabs from './components/Tabs'
 import FiltersPanel from './components/FiltersPanel'
+import ResultsPanel from './components/ResultsPanel'
 import HistoryPanel from './components/HistoryPanel'
 import StatsPanel from './components/StatsPanel'
-import ResultsPanel from './components/ResultsPanel'
 import FilterModal from './components/FilterModal'
-import Toast from './components/Toast'
-import { toast } from './components/Toast'
+import Toast, { toast } from './components/Toast'
 
 const TABS = [
-  { key: 'results', label: '🔍 Результаты' },
-  { key: 'filters', label: '📋 Фильтры' },
+  { key: 'search', label: '🔍 Поиск' },
   { key: 'history', label: '📨 История' },
   { key: 'stats', label: '📊 Статистика' },
 ]
@@ -20,188 +18,164 @@ const TABS = [
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [filters, setFilters] = useState<VacancyFilter[]>([])
-  const [history, setHistory] = useState<HistoryItem[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [results, setResults] = useState<VacancyResult[]>([])
   const [checkedAt, setCheckedAt] = useState<string | null>(null)
-  const [resultsLoading, setResultsLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState('results')
+  const [checking, setChecking] = useState(false)
+  const [activeTab, setActiveTab] = useState('search')
+  const [selectedFilterId, setSelectedFilterId] = useState<number | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [dark, setDark] = useState(() => {
     const saved = localStorage.getItem('theme')
     if (saved) return saved === 'dark'
     return window.matchMedia('(prefers-color-scheme: dark)').matches
   })
-  const [checking, setChecking] = useState(false)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
     localStorage.setItem('theme', dark ? 'dark' : 'light')
   }, [dark])
 
-  const toggleTheme = useCallback(() => setDark((prev) => !prev), [])
+  const toggleTheme = () => setDark((prev) => !prev)
 
   const fetchConfig = useCallback(async () => {
-    try {
-      const c = await api.getConfig()
-      setConfig(c)
-    } catch {
-      console.error('Failed to load config')
-    }
+    try { setConfig(await api.getConfig()) } catch { console.error('config fail') }
   }, [])
 
   const fetchFilters = useCallback(async () => {
-    try {
-      const data = await api.getFilters()
-      setFilters(data)
-    } catch {
-      toast.error('Ошибка загрузки фильтров')
-    }
-  }, [])
-
-  const fetchHistory = useCallback(async () => {
-    try {
-      const data = await api.getHistory()
-      setHistory(data)
-    } catch {
-      toast.error('Ошибка загрузки истории')
-    }
+    try { setFilters(await api.getFilters()) } catch { toast.error('Ошибка загрузки фильтров') }
   }, [])
 
   const fetchStats = useCallback(async () => {
-    try {
-      const data = await api.getStats()
-      setStats(data)
-    } catch {
-      toast.error('Ошибка загрузки статистики')
-    }
+    try { setStats(await api.getStats()) } catch { toast.error('Ошибка загрузки статистики') }
   }, [])
 
   const fetchResults = useCallback(async () => {
-    setResultsLoading(true)
     try {
       const data = await api.getResults()
       setResults(data.items)
       setCheckedAt(data.checked_at)
-    } catch {
-      toast.error('Ошибка загрузки результатов')
-    } finally {
-      setResultsLoading(false)
-    }
+      setChecking(data.checking)
+    } catch { toast.error('Ошибка загрузки результатов') }
   }, [])
 
-  useEffect(() => {
-    fetchConfig()
-  }, [fetchConfig])
+  useEffect(() => { fetchConfig() }, [fetchConfig])
 
   useEffect(() => {
-    if (activeTab === 'results') fetchResults()
-    else if (activeTab === 'filters') fetchFilters()
-    else if (activeTab === 'history') fetchHistory()
+    if (activeTab === 'search') { fetchFilters(); fetchResults() }
     else if (activeTab === 'stats') fetchStats()
-  }, [activeTab, fetchResults, fetchFilters, fetchHistory, fetchStats])
+  }, [activeTab, fetchFilters, fetchResults, fetchStats])
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (activeTab === 'results') fetchResults()
-      else if (activeTab === 'filters' && !createOpen) fetchFilters()
-      else if (activeTab === 'history') fetchHistory()
-      else if (activeTab === 'stats') fetchStats()
-    }, 30000)
-    return () => clearInterval(timer)
-  }, [activeTab, createOpen, fetchResults, fetchFilters, fetchHistory, fetchStats])
+  const [checkingNow, setCheckingNow] = useState(false)
 
   const handleCheckNow = async () => {
-    setChecking(true)
+    setCheckingNow(true)
     try {
-      const result = await api.checkNow()
-      toast.success(result.message || 'Проверка запущена!')
-    } catch {
-      toast.error('Ошибка запуска проверки')
-    } finally {
-      setChecking(false)
-    }
+      await api.checkNow()
+      toast.success('Проверка запущена!')
+      setChecking(true)
+      setTimeout(() => fetchResults(), 2000)
+    } catch { toast.error('Ошибка запуска проверки') }
+    finally { setCheckingNow(false) }
   }
 
   const handleRefresh = useCallback(() => {
     fetchFilters()
-    fetchHistory()
-    fetchStats()
     fetchResults()
-  }, [fetchFilters, fetchHistory, fetchStats, fetchResults])
+    fetchStats()
+  }, [fetchFilters, fetchResults, fetchStats])
+
+  const filteredResults = selectedFilterId
+    ? results
+    : results
 
   return (
-    <div className="min-h-screen">
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* Header */}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="max-w-6xl mx-auto px-4 py-5">
+        {/* Header bar */}
         <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold">
+            <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">
               🔍 Job Bot
-              <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
-                Панель управления фильтрами
-              </span>
             </h1>
           </div>
-          <button
-            onClick={toggleTheme}
-            className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
-            aria-label={dark ? 'Светлая тема' : 'Тёмная тема'}
-          >
-            {dark ? '☀️' : '🌙'}
-          </button>
-        </div>
-
-        {/* Actions */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          <button
-            onClick={handleCheckNow}
-            disabled={checking}
-            className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50 cursor-pointer"
-            aria-label="Проверить вакансии сейчас"
-          >
-            {checking ? '⏳ Проверка...' : '🔍 Проверить сейчас'}
-          </button>
-          <button
-            onClick={() => {
-              setCreateOpen(true)
-              setActiveTab('filters')
-            }}
-            className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
-            aria-label="Создать фильтр"
-          >
-            ➕ Создать фильтр
-          </button>
-          <span className="text-xs text-gray-400 self-center ml-2">
-            Автоматически раз в час · обновление каждые 30 с
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setCreateOpen(true); setSelectedFilterId(null) }}
+              className="px-3 py-1.5 text-xs font-medium border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+              aria-label="Создать фильтр"
+            >
+              ➕ Фильтр
+            </button>
+            <button
+              onClick={toggleTheme}
+              className="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+              aria-label={dark ? 'Светлая тема' : 'Тёмная тема'}
+            >
+              {dark ? '☀️' : '🌙'}
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
         <Tabs tabs={TABS} active={activeTab} onTabChange={setActiveTab} />
 
-        {/* Panels */}
-        {activeTab === 'results' && config && (
-          <ResultsPanel
-            results={results}
-            config={config}
-            checkedAt={checkedAt}
-            loading={resultsLoading}
-          />
-        )}
+        {/* Filters + Results (merged) */}
+        {activeTab === 'search' && config && (
+          <div className="space-y-4">
+            {/* Filter selector bar */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-3.5">
+              <FiltersPanel
+                filters={filters}
+                config={config}
+                selectedId={selectedFilterId}
+                onSelect={setSelectedFilterId}
+                onRefresh={handleRefresh}
+              />
+            </div>
 
-        {activeTab === 'filters' && config && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <FiltersPanel filters={filters} config={config} onRefresh={handleRefresh} />
+            {/* Check button inline */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCheckNow}
+                disabled={checkingNow}
+                className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 transition-all cursor-pointer shadow-sm"
+                aria-label="Проверить вакансии"
+              >
+                {checkingNow || checking ? '⏳ Проверка...' : '🔍 Проверить сейчас'}
+              </button>
+              <button
+                onClick={fetchResults}
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                aria-label="Обновить результаты"
+              >
+                🔄 Обновить
+              </button>
+            </div>
+
+            {/* Results */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              <ResultsPanel
+                results={filteredResults}
+                config={config}
+                checkedAt={checkedAt}
+                checking={checking}
+                filters={filters}
+                selectedFilterId={selectedFilterId}
+                onRefreshResults={fetchResults}
+              />
+            </div>
           </div>
         )}
 
+        {/* History tab */}
         {activeTab === 'history' && config && (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <HistoryPanel history={history} config={config} />
+            <HistoryPanel config={config} />
           </div>
         )}
 
+        {/* Stats tab */}
         {activeTab === 'stats' && stats && (
           <StatsPanel stats={stats} />
         )}
@@ -213,13 +187,12 @@ export default function App() {
         )}
       </div>
 
-      {/* Create modal */}
       {createOpen && config && (
         <FilterModal
           config={config}
           filter={null}
           onClose={() => setCreateOpen(false)}
-          onSaved={handleRefresh}
+          onSaved={() => { handleRefresh(); fetchResults() }}
         />
       )}
 

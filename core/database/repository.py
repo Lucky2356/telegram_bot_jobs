@@ -132,6 +132,13 @@ class Database:
             )
             return list(result.scalars().all())
 
+    async def get_all_filters(self) -> list[VacancyFilter]:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(VacancyFilter).order_by(VacancyFilter.created_at.desc())
+            )
+            return list(result.scalars().all())
+
     async def add_vacancy(self, data: VacancyData) -> Vacancy | None:
         async with self.session_factory() as session:
             result = await session.execute(

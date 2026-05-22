@@ -1,4 +1,6 @@
-import type { VacancyFilter, HistoryItem, Stats, FilterFormData, AppConfig, VacancyResult } from '../types'
+import type {
+  VacancyFilter, FilterFormData, AppConfig, ResultsResponse, HistoryResponse, Stats,
+} from '../types'
 
 const BASE = '/api'
 
@@ -19,19 +21,11 @@ export const api = {
 
   getFilters: (): Promise<VacancyFilter[]> => request(`${BASE}/filters`),
 
-  getFilter: (id: number): Promise<VacancyFilter> => request(`${BASE}/filters/${id}`),
-
   createFilter: (data: FilterFormData): Promise<{ ok: boolean; filter: VacancyFilter }> =>
-    request(`${BASE}/filters`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+    request(`${BASE}/filters`, { method: 'POST', body: JSON.stringify(data) }),
 
   updateFilter: (id: number, data: FilterFormData): Promise<{ ok: boolean; filter: VacancyFilter }> =>
-    request(`${BASE}/filters/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+    request(`${BASE}/filters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 
   deleteFilter: (id: number): Promise<{ ok: boolean }> =>
     request(`${BASE}/filters/${id}`, { method: 'DELETE' }),
@@ -39,13 +33,13 @@ export const api = {
   toggleFilter: (id: number): Promise<{ ok: boolean; active: boolean }> =>
     request(`${BASE}/filters/${id}/toggle`, { method: 'POST' }),
 
-  getHistory: (): Promise<HistoryItem[]> => request(`${BASE}/history`),
+  getHistory: (page = 1, limit = 20): Promise<HistoryResponse> =>
+    request(`${BASE}/history?page=${page}&limit=${limit}`),
 
   getStats: (): Promise<Stats> => request(`${BASE}/stats`),
 
   checkNow: (): Promise<{ ok: boolean; message: string }> =>
     request(`${BASE}/check_now`, { method: 'POST' }),
 
-  getResults: (): Promise<{ items: VacancyResult[]; checked_at: string | null }> =>
-    request(`${BASE}/results`),
+  getResults: (): Promise<ResultsResponse> => request(`${BASE}/results`),
 }

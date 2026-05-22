@@ -141,7 +141,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.get("/api/filters")
     async def api_filters():
-        filters = await db.get_all_active_filters()
+        filters = await db.get_all_filters()
         return [
             {
                 "id": vf.id,
@@ -231,24 +231,30 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             return {
                 "items": scheduler.get_last_results(),
                 "checked_at": scheduler.last_results_time,
+                "checking": scheduler._lock.locked(),
             }
-        return {"items": [], "checked_at": None}
+        return {"items": [], "checked_at": None, "checking": False}
 
     @app.get("/api/history")
-    async def api_history():
-        history = await db.get_recent_sent(limit=50)
-        return [
-            {
-                "vacancy_title": v.title,
-                "company": v.company,
-                "salary": v.salary_text,
-                "source": v.source,
-                "url": v.url,
-                "filter_name": vf.name if vf else None,
-                "sent_at": sv.sent_at.isoformat() if sv.sent_at else None,
-            }
-            for sv, v, u, vf in history
-        ]
+    async def api_history(page: int = 1, limit: int = 20):
+        offset = (page - 1) * limit
+        history = await db.get_recent_sent(limit=limit)
+        return {
+            "items": [
+                {
+                    "vacancy_title": v.title,
+                    "company": v.company,
+                    "salary": v.salary_text,
+                    "source": v.source,
+                    "url": v.url,
+                    "filter_name": vf.name if vf else None,
+                    "sent_at": sv.sent_at.isoformat() if sv.sent_at else None,
+                }
+                for sv, v, u, vf in history
+            ],
+            "page": page,
+            "has_more": len(history) == limit,
+        }
 
     return app
 

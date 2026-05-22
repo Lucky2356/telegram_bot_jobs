@@ -13,7 +13,7 @@ export default function Tabs({ tabs, active, onTabChange }: TabsProps) {
   }
 
   return (
-    <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700 mb-6" role="tablist">
+    <div className="flex gap-1 mb-6" role="tablist">
       {tabs.map((tab) => (
         <button
           key={tab.key}
@@ -23,10 +23,10 @@ export default function Tabs({ tabs, active, onTabChange }: TabsProps) {
           tabIndex={0}
           onClick={() => onTabChange(tab.key)}
           onKeyDown={handleKeyDown(tab.key)}
-          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+          className={`px-5 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
             active === tab.key
-              ? 'border-primary text-primary dark:border-primary dark:text-primary'
-              : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+              ? 'bg-primary text-white shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
           }`}
         >
           {tab.label}
