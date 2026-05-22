@@ -5,11 +5,21 @@ import type {
 
 const BASE = '/api'
 
+function getAuthHeaders(): Record<string, string> {
+  const token = sessionStorage.getItem('auth_token')
+  return token ? { 'Authorization': `Bearer ${token}` } : {}
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const resp = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     ...options,
   })
+  if (resp.status === 401) {
+    sessionStorage.removeItem('auth_token')
+    window.location.reload()
+    throw new Error('Unauthorized')
+  }
   if (!resp.ok) {
     const text = await resp.text()
     throw new Error(text || `HTTP ${resp.status}`)

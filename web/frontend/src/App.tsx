@@ -12,6 +12,7 @@ import StatusBar from './components/StatusBar'
 import FilterModal from './components/FilterModal'
 import ErrorBoundary from './components/ErrorBoundary'
 import Toast, { toast } from './components/Toast'
+import LoginPage from './components/LoginPage'
 
 const TABS = [
   { key: 'search', label: '🔍 Поиск' },
@@ -28,6 +29,8 @@ const loadingSpinner = (
 )
 
 export default function App() {
+  const [token, setToken] = useState<string | null>(() => sessionStorage.getItem('auth_token'))
+  const [authLoading, setAuthLoading] = useState(!token)
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [status, setStatus] = useState<ParserStatus | null>(null)
   const [filters, setFilters] = useState<VacancyFilter[]>([])
@@ -52,6 +55,44 @@ export default function App() {
     document.documentElement.classList.toggle('dark', dark)
     try { localStorage.setItem('theme', dark ? 'dark' : 'light') } catch { /* ignore */ }
   }, [dark])
+
+  const handleLogin = (newToken: string) => {
+    sessionStorage.setItem('auth_token', newToken)
+    setToken(newToken)
+    setAuthLoading(false)
+  }
+
+  // Если пароль не установлен — получаем токен без логина
+  useEffect(() => {
+    if (!token) {
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: '' }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.ok && data.token) {
+            sessionStorage.setItem('auth_token', data.token)
+            setToken(data.token)
+          }
+          setAuthLoading(false)
+        })
+        .catch(() => setAuthLoading(false))
+    }
+  }, [])
+
+  if (!token && !authLoading) {
+    return <LoginPage onLogin={handleLogin} />
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent" />
+      </div>
+    )
+  }
 
   const toggleTheme = () => setDark((prev) => !prev)
 

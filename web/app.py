@@ -3,14 +3,16 @@ import json
 import os
 import uvicorn
 from pydantic import BaseModel
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.status import HTTP_401_UNAUTHORIZED
 from core.config import settings
 from core.database.repository import Database
 from core.scheduler import Scheduler
 from bot.keyboards import EMPLOYMENT_TYPES, SITES, KEYWORDS_BY_GROUP, CITIES, SALARIES, EXPERIENCE
+from web.auth import create_token, verify_token
 
 
 REACT_BUILD_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
@@ -73,6 +75,21 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     app.state.db = db
     templates = Jinja2Templates(directory="web/templates")
 
+    # Auth middleware
+    if settings.WEB_PASSWORD:
+        @app.middleware("http")
+        async def auth_middleware(request: Request, call_next):
+            path = request.url.path
+            if path.startswith("/api/") and not path.startswith("/api/auth/"):
+                auth = request.headers.get("Authorization", "")
+                if not auth.startswith("Bearer ") or not verify_token(auth[7:]):
+                    return HTMLResponse(
+                        content=json.dumps({"ok": False, "message": "Unauthorized"}),
+                        status_code=HTTP_401_UNAUTHORIZED,
+                        headers={"Content-Type": "application/json"},
+                    )
+            return await call_next(request)
+
     # Mount React static assets if build exists
     assets_dir = os.path.join(REACT_BUILD_DIR, "assets")
     if os.path.isdir(assets_dir):
@@ -81,6 +98,17 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     async def dashboard(request: Request):
         return await _serve_react_or_fallback(app, request, templates)
+
+    class LoginData(BaseModel):
+        password: str
+
+    @app.post("/api/auth/login")
+    async def api_login(data: LoginData):
+        if settings.WEB_PASSWORD and data.password == settings.WEB_PASSWORD:
+            return {"ok": True, "token": create_token()}
+        if not settings.WEB_PASSWORD:
+            return {"ok": True, "token": create_token()}
+        return {"ok": False, "message": "Неверный пароль"}, HTTP_401_UNAUTHORIZED
 
     @app.get("/api/config")
     async def api_config():
