@@ -1,4 +1,4 @@
-import type { VacancyFilter, HistoryItem, Stats, FilterFormData, AppConfig } from '../types'
+import type { VacancyFilter, HistoryItem, Stats, FilterFormData, AppConfig, VacancyResult } from '../types'
 
 const BASE = '/api'
 
@@ -45,4 +45,7 @@ export const api = {
 
   checkNow: (): Promise<{ ok: boolean; message: string }> =>
     request(`${BASE}/check_now`, { method: 'POST' }),
+
+  getResults: (): Promise<{ items: VacancyResult[]; checked_at: string | null }> =>
+    request(`${BASE}/results`),
 }

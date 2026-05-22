@@ -21,6 +21,30 @@ class Scheduler:
         self._scrapers: dict[str, BaseScraper] = {}
         self._user_buffers: dict[int, list[tuple[int, str, str, str]]] = {}
         self._lock = asyncio.Lock()
+        self.last_results: dict[int, list[VacancyData]] = {}
+        self.last_results_time: str | None = None
+
+    def get_last_results(self) -> list[dict]:
+        """Return cached results from the last check as serializable dicts."""
+        combined: list[VacancyData] = []
+        for items in self.last_results.values():
+            combined.extend(items)
+        from datetime import datetime, timezone
+        return [
+            {
+                "title": v.title,
+                "company": v.company,
+                "salary_text": v.salary_text,
+                "city": v.city,
+                "employment_type": v.employment_type,
+                "experience": v.experience,
+                "description": v.description,
+                "url": v.url,
+                "source": v.source,
+                "published_at": v.published_at.isoformat() if v.published_at else None,
+            }
+            for v in combined
+        ]
 
     def _get_scraper(self, site: str) -> BaseScraper | None:
         if site not in self._scrapers:
@@ -49,8 +73,11 @@ class Scheduler:
             logger.info("Check already running, skipping.")
             return
         async with self._lock:
-            logger.info("Starting vacancy check...")
+            from datetime import datetime, timezone
             self._user_buffers.clear()
+            self.last_results.clear()
+            self.last_results_time = datetime.now(timezone.utc).isoformat()
+            logger.info("Starting vacancy check...")
             filters = await self.db.get_all_active_filters()
             if not filters:
                 logger.info("No active filters, skipping check.")
@@ -158,6 +185,7 @@ class Scheduler:
         card = format_vacancy_card(vac_data)
         try:
             self._user_buffers.setdefault(user.id, []).append((vac.id, vac_data.source, vac_data.url, card))
+            self.last_results.setdefault(user.id, []).append(vac_data)
             await self.db.mark_sent(user.id, vac.id, filter_id=vf.id)
             logger.info("Buffered vacancy %s for user %s", vac_data.title[:50], user.telegram_id)
         except Exception as e:

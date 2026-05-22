@@ -54,4 +54,17 @@ export interface AppConfig {
   keyword_groups: Record<string, Record<string, string[]>>
 }
 
+export interface VacancyResult {
+  title: string
+  company: string | null
+  salary_text: string | null
+  city: string | null
+  employment_type: string | null
+  experience: string | null
+  description: string | null
+  url: string
+  source: string
+  published_at: string | null
+}
+
 export type SalaryTuple = [string, string, number | null, number | null]

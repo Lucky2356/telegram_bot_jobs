@@ -1,15 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { VacancyFilter, HistoryItem, Stats, AppConfig } from './types'
+import type { VacancyFilter, HistoryItem, Stats, AppConfig, VacancyResult } from './types'
 import { api } from './api'
 import Tabs from './components/Tabs'
 import FiltersPanel from './components/FiltersPanel'
 import HistoryPanel from './components/HistoryPanel'
 import StatsPanel from './components/StatsPanel'
+import ResultsPanel from './components/ResultsPanel'
 import FilterModal from './components/FilterModal'
 import Toast from './components/Toast'
 import { toast } from './components/Toast'
 
 const TABS = [
+  { key: 'results', label: '🔍 Результаты' },
   { key: 'filters', label: '📋 Фильтры' },
   { key: 'history', label: '📨 История' },
   { key: 'stats', label: '📊 Статистика' },
@@ -20,7 +22,10 @@ export default function App() {
   const [filters, setFilters] = useState<VacancyFilter[]>([])
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
-  const [activeTab, setActiveTab] = useState('filters')
+  const [results, setResults] = useState<VacancyResult[]>([])
+  const [checkedAt, setCheckedAt] = useState<string | null>(null)
+  const [resultsLoading, setResultsLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState('results')
   const [createOpen, setCreateOpen] = useState(false)
   const [dark, setDark] = useState(() => {
     const saved = localStorage.getItem('theme')
@@ -72,24 +77,39 @@ export default function App() {
     }
   }, [])
 
+  const fetchResults = useCallback(async () => {
+    setResultsLoading(true)
+    try {
+      const data = await api.getResults()
+      setResults(data.items)
+      setCheckedAt(data.checked_at)
+    } catch {
+      toast.error('Ошибка загрузки результатов')
+    } finally {
+      setResultsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchConfig()
   }, [fetchConfig])
 
   useEffect(() => {
-    if (activeTab === 'filters') fetchFilters()
+    if (activeTab === 'results') fetchResults()
+    else if (activeTab === 'filters') fetchFilters()
     else if (activeTab === 'history') fetchHistory()
     else if (activeTab === 'stats') fetchStats()
-  }, [activeTab, fetchFilters, fetchHistory, fetchStats])
+  }, [activeTab, fetchResults, fetchFilters, fetchHistory, fetchStats])
 
   useEffect(() => {
     const timer = setInterval(() => {
-      if (activeTab === 'filters' && !createOpen) fetchFilters()
+      if (activeTab === 'results') fetchResults()
+      else if (activeTab === 'filters' && !createOpen) fetchFilters()
       else if (activeTab === 'history') fetchHistory()
       else if (activeTab === 'stats') fetchStats()
     }, 30000)
     return () => clearInterval(timer)
-  }, [activeTab, createOpen, fetchFilters, fetchHistory, fetchStats])
+  }, [activeTab, createOpen, fetchResults, fetchFilters, fetchHistory, fetchStats])
 
   const handleCheckNow = async () => {
     setChecking(true)
@@ -107,7 +127,8 @@ export default function App() {
     fetchFilters()
     fetchHistory()
     fetchStats()
-  }, [fetchFilters, fetchHistory, fetchStats])
+    fetchResults()
+  }, [fetchFilters, fetchHistory, fetchStats, fetchResults])
 
   return (
     <div className="min-h-screen">
@@ -142,7 +163,10 @@ export default function App() {
             {checking ? '⏳ Проверка...' : '🔍 Проверить сейчас'}
           </button>
           <button
-            onClick={() => setCreateOpen(true)}
+            onClick={() => {
+              setCreateOpen(true)
+              setActiveTab('filters')
+            }}
             className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
             aria-label="Создать фильтр"
           >
@@ -157,6 +181,15 @@ export default function App() {
         <Tabs tabs={TABS} active={activeTab} onTabChange={setActiveTab} />
 
         {/* Panels */}
+        {activeTab === 'results' && config && (
+          <ResultsPanel
+            results={results}
+            config={config}
+            checkedAt={checkedAt}
+            loading={resultsLoading}
+          />
+        )}
+
         {activeTab === 'filters' && config && (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <FiltersPanel filters={filters} config={config} onRefresh={handleRefresh} />

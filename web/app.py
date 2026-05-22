@@ -225,6 +225,15 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             return {"ok": True, "message": "Проверка запущена!"}
         return {"ok": False, "message": "Scheduler not available"}
 
+    @app.get("/api/results")
+    async def api_results():
+        if scheduler:
+            return {
+                "items": scheduler.get_last_results(),
+                "checked_at": scheduler.last_results_time,
+            }
+        return {"items": [], "checked_at": None}
+
     @app.get("/api/history")
     async def api_history():
         history = await db.get_recent_sent(limit=50)
