@@ -13,42 +13,31 @@ interface FilterModalProps {
 export default function FilterModal({ config, filter, onClose, onSaved }: FilterModalProps) {
   const isEdit = filter !== null
   const [form, setForm] = useState<FilterFormData>({
-    name: '',
-    keywords: [],
-    city: null,
-    salary_min: null,
-    salary_max: null,
-    employment_types: [],
-    sites: [],
-    exclude_keywords: [],
-    experience: null,
+    name: '', keywords: [], city: null,
+    salary_min: null, salary_max: null,
+    employment_types: [], sites: [],
+    exclude_keywords: [], experience: null,
   })
   const [saving, setSaving] = useState(false)
+  const [kwCollapsed, setKwCollapsed] = useState(false)
+  const [exCollapsed, setExCollapsed] = useState(true)
 
   useEffect(() => {
     if (filter) {
       setForm({
-        name: filter.name,
-        keywords: filter.keywords,
-        city: filter.city,
-        salary_min: filter.salary_min,
-        salary_max: filter.salary_max,
-        employment_types: filter.employment_types,
-        sites: filter.sites,
-        exclude_keywords: filter.exclude_keywords,
-        experience: filter.experience,
+        name: filter.name, keywords: filter.keywords, city: filter.city,
+        salary_min: filter.salary_min, salary_max: filter.salary_max,
+        employment_types: filter.employment_types, sites: filter.sites,
+        exclude_keywords: filter.exclude_keywords, experience: filter.experience,
       })
     }
   }, [filter])
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') onClose()
-  }, [onClose])
-
   useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown as unknown as EventListener)
-    return () => document.removeEventListener('keydown', handleKeyDown as unknown as EventListener)
-  }, [handleKeyDown])
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [onClose])
 
   const toggleKeyword = (kw: string) => {
     setForm((prev) => ({
@@ -87,19 +76,9 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
   }
 
   const handleSave = async () => {
-    if (!form.name.trim()) {
-      toast.error('Введите название фильтра')
-      return
-    }
-    if (form.keywords.length === 0) {
-      toast.error('Выберите хотя бы одно ключевое слово')
-      return
-    }
-    if (form.sites.length === 0) {
-      toast.error('Выберите хотя бы один сайт')
-      return
-    }
-
+    if (!form.name.trim()) { toast.error('Введите название фильтра'); return }
+    if (form.keywords.length === 0) { toast.error('Выберите хотя бы одно ключевое слово'); return }
+    if (form.sites.length === 0) { toast.error('Выберите хотя бы один сайт'); return }
     setSaving(true)
     try {
       if (isEdit) {
@@ -109,13 +88,9 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
         await api.createFilter(form)
         toast.success('Фильтр создан')
       }
-      onSaved()
-      onClose()
-    } catch {
-      toast.error('Ошибка сохранения фильтра')
-    } finally {
-      setSaving(false)
-    }
+      onSaved(); onClose()
+    } catch { toast.error('Ошибка сохранения') }
+    finally { setSaving(false) }
   }
 
   const selectedSalary = config.salaries.find(
@@ -124,22 +99,14 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
   const salaryKey = selectedSalary ? selectedSalary[0] : 'any'
 
   const handleSalaryChange = (key: string) => {
-    if (key === 'any') {
-      setForm((prev) => ({ ...prev, salary_min: null, salary_max: null }))
-      return
-    }
+    if (key === 'any') { setForm((prev) => ({ ...prev, salary_min: null, salary_max: null })); return }
     const salary = config.salaries.find((s) => s[0] === key)
-    if (salary) {
-      setForm((prev) => ({ ...prev, salary_min: salary[2], salary_max: salary[3] }))
-    }
+    if (salary) setForm((prev) => ({ ...prev, salary_min: salary[2], salary_max: salary[3] }))
   }
 
   const overlayRef = useCallback((node: HTMLDivElement | null) => {
     if (node) {
-      const handleClick = (e: MouseEvent) => {
-        if (e.target === node) onClose()
-      }
-      node.addEventListener('click', handleClick)
+      node.addEventListener('click', (e) => { if (e.target === node) onClose() })
     }
   }, [onClose])
 
@@ -151,120 +118,197 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
       aria-label={isEdit ? 'Редактировать фильтр' : 'Создать фильтр'}
       aria-modal="true"
     >
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="sticky top-0 bg-white dark:bg-gray-800 z-10 flex items-center justify-between px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-700">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
             {isEdit ? '✏️ Редактировать фильтр' : '➕ Создать фильтр'}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
             aria-label="Закрыть"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClose() } }}
           >
             ✕
           </button>
         </div>
 
-        <div className="space-y-4">
+        {/* Body */}
+        <div className="px-6 py-4 space-y-5">
+
+          {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-              Название
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
+              📛 Название
             </label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3.5 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
               placeholder="Мой фильтр"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-              Ключевые слова
-            </label>
-            <div className="max-h-48 overflow-y-auto space-y-2 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-              {Object.entries(config.keyword_groups).map(([group, items]) => (
-                <div key={group}>
-                  <p className="text-xs font-semibold text-gray-400 uppercase mb-1">{group}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {Object.keys(items).map((kw) => {
-                      const selected = form.keywords.includes(kw)
-                      return (
+          {/* Keywords */}
+          <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => setKwCollapsed(!kwCollapsed)}
+              className="flex items-center justify-between w-full text-left cursor-pointer"
+              aria-label={kwCollapsed ? 'Развернуть' : 'Свернуть'}
+            >
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                🔑 Ключевые слова
+                <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-primary/10 text-primary font-medium">
+                  {form.keywords.length}
+                </span>
+              </span>
+              <span className="text-gray-400 text-sm">{kwCollapsed ? '▶' : '▼'}</span>
+            </button>
+
+            {!kwCollapsed && (
+              <div className="mt-3 space-y-3">
+                {/* Selected chips */}
+                {form.keywords.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {form.keywords.map((kw) => (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-primary text-white" key={kw}>
+                        {kw}
                         <button
-                          key={kw}
                           onClick={() => toggleKeyword(kw)}
-                          className={`px-2 py-1 text-xs rounded-full border transition-colors cursor-pointer ${
-                            selected
-                              ? 'bg-primary text-white border-primary'
-                              : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-primary'
-                          }`}
-                          aria-label={`${selected ? 'Убрать' : 'Добавить'} ключевое слово ${kw}`}
+                          className="ml-0.5 hover:text-white/70 cursor-pointer"
+                          aria-label={`Убрать ${kw}`}
                         >
-                          {kw}
+                          ✕
                         </button>
-                      )
-                    })}
+                      </span>
+                    ))}
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-              Исключить слова
-            </label>
-            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
-              {Object.values(config.keyword_groups).map((items) =>
-                Object.keys(items).map((kw) => {
-                  const selected = form.exclude_keywords.includes(kw)
+                {/* Groups */}
+                {Object.entries(config.keyword_groups).map(([group, items]) => {
+                  const groupKws = Object.keys(items)
+                  const selectedCount = groupKws.filter((kw) => form.keywords.includes(kw)).length
                   return (
-                    <button
-                      key={`ex-${kw}`}
-                      onClick={() => toggleExclude(kw)}
-                      className={`px-2 py-1 text-xs rounded-full border transition-colors cursor-pointer ${
-                        selected
-                          ? 'bg-red-500 text-white border-red-500'
-                          : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-red-400'
-                      }`}
-                      aria-label={selected ? `Не исключать ${kw}` : `Исключить ${kw}`}
-                    >
-                      {kw}
-                    </button>
+                    <div key={group}>
+                      <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 mb-1.5">
+                        {group}
+                        <span className="ml-1 font-normal text-gray-300 dark:text-gray-600">
+                          {selectedCount}/{groupKws.length}
+                        </span>
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {groupKws.map((kw) => {
+                          const sel = form.keywords.includes(kw)
+                          return (
+                            <button
+                              key={kw}
+                              onClick={() => toggleKeyword(kw)}
+                              className={`px-2.5 py-1 text-xs rounded-lg border transition-all cursor-pointer ${
+                                sel
+                                  ? 'bg-primary text-white border-primary shadow-sm'
+                                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-primary hover:text-primary'
+                              }`}
+                              aria-label={sel ? `Убрать ${kw}` : `Добавить ${kw}`}
+                            >
+                              {kw}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   )
-                }),
-              )}
-            </div>
+                })}
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                Город
+          {/* Exclude keywords */}
+          <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => setExCollapsed(!exCollapsed)}
+              className="flex items-center justify-between w-full text-left cursor-pointer"
+            >
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                🚫 Исключить
+                {form.exclude_keywords.length > 0 && (
+                  <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-red-100 dark:bg-red-900/30 text-red-500 font-medium">
+                    {form.exclude_keywords.length}
+                  </span>
+                )}
+              </span>
+              <span className="text-gray-400 text-sm">{exCollapsed ? '▶' : '▼'}</span>
+            </button>
+
+            {!exCollapsed && (
+              <div className="mt-3 space-y-3">
+                {form.exclude_keywords.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {form.exclude_keywords.map((kw) => (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-red-500 text-white" key={`ex-chip-${kw}`}>
+                        {kw}
+                        <button
+                          onClick={() => toggleExclude(kw)}
+                          className="ml-0.5 hover:text-white/70 cursor-pointer"
+                          aria-label={`Не исключать ${kw}`}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {Object.values(config.keyword_groups).map((items) =>
+                  Object.keys(items).map((kw) => {
+                    const sel = form.exclude_keywords.includes(kw)
+                    return (
+                      <button
+                        key={`ex-${kw}`}
+                        onClick={() => toggleExclude(kw)}
+                        className={`px-2.5 py-1 text-xs rounded-lg border transition-all cursor-pointer mr-1 mb-1 ${
+                          sel
+                            ? 'bg-red-500 text-white border-red-500 shadow-sm'
+                            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-red-400 hover:text-red-500'
+                        }`}
+                        aria-label={sel ? `Не исключать ${kw}` : `Исключить ${kw}`}
+                      >
+                        {kw}
+                      </button>
+                    )
+                  }),
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* City + Salary */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-3.5 border border-gray-200 dark:border-gray-700">
+              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
+                📍 Город
               </label>
               <select
                 value={form.city ?? ''}
                 onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value || null }))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="">Любой</option>
+                <option value="">🌍 Любой</option>
                 {Object.entries(config.cities).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
+                  <option key={key} value={key}>📍 {label}</option>
                 ))}
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                Зарплата
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-3.5 border border-gray-200 dark:border-gray-700">
+              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
+                💰 Зарплата
               </label>
               <select
                 value={salaryKey}
                 onChange={(e) => handleSalaryChange(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 {config.salaries.map(([key, label]) => (
                   <option key={key} value={key}>{label}</option>
@@ -273,24 +317,25 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                Тип занятости
+          {/* Employment + Experience */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-3.5 border border-gray-200 dark:border-gray-700">
+              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
+                👔 Тип занятости
               </label>
-              <div className="flex flex-wrap gap-1 border border-gray-200 dark:border-gray-700 rounded-lg p-2">
+              <div className="flex flex-wrap gap-1.5">
                 {Object.entries(config.employment_types).map(([key, label]) => {
-                  const selected = form.employment_types.includes(key)
+                  const sel = form.employment_types.includes(key)
                   return (
                     <button
                       key={key}
                       onClick={() => toggleEmployment(key)}
-                      className={`px-2 py-1 text-xs rounded transition-colors cursor-pointer ${
-                        selected
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      className={`px-2.5 py-1 text-xs rounded-lg border transition-all cursor-pointer ${
+                        sel
+                          ? 'bg-primary text-white border-primary shadow-sm'
+                          : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-primary'
                       }`}
-                      aria-label={selected ? `Убрать ${label}` : `Выбрать ${label}`}
+                      aria-label={sel ? `Убрать ${label}` : `Выбрать ${label}`}
                     >
                       {label}
                     </button>
@@ -299,14 +344,14 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                Опыт
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-3.5 border border-gray-200 dark:border-gray-700">
+              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">
+                💼 Опыт
               </label>
               <select
                 value={form.experience ?? ''}
                 onChange={(e) => setForm((prev) => ({ ...prev, experience: e.target.value || null }))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">Любой</option>
                 {Object.entries(config.experiences).map(([key, label]) => (
@@ -316,23 +361,27 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-              Сайты
+          {/* Sites */}
+          <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-3.5 border border-gray-200 dark:border-gray-700">
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+              🌐 Сайты
+              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-primary/10 text-primary font-medium">
+                {form.sites.length}
+              </span>
             </label>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1.5">
               {Object.entries(config.sites).map(([key, label]) => {
-                const selected = form.sites.includes(key)
+                const sel = form.sites.includes(key)
                 return (
                   <button
                     key={key}
                     onClick={() => toggleSite(key)}
-                    className={`px-3 py-1.5 text-sm rounded-lg border transition-colors cursor-pointer ${
-                      selected
-                        ? 'bg-primary text-white border-primary'
-                        : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-primary'
+                    className={`px-3 py-1.5 text-sm rounded-lg border transition-all cursor-pointer ${
+                      sel
+                        ? 'bg-primary text-white border-primary shadow-sm'
+                        : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-primary'
                     }`}
-                    aria-label={selected ? `Убрать ${label}` : `Выбрать ${label}`}
+                    aria-label={sel ? `Убрать ${label}` : `Выбрать ${label}`}
                   >
                     {label}
                   </button>
@@ -342,21 +391,20 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 mt-6">
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-white dark:bg-gray-800 flex items-center justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-gray-700">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer"
-            aria-label="Отмена"
+            className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-all"
           >
             Отмена
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50 cursor-pointer"
-            aria-label={isEdit ? 'Сохранить фильтр' : 'Создать фильтр'}
+            className="px-5 py-2 text-sm font-medium bg-primary text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 transition-all cursor-pointer shadow-sm"
           >
-            {saving ? 'Сохранение...' : isEdit ? '💾 Сохранить' : '✅ Создать'}
+            {saving ? '⏳ Сохранение...' : isEdit ? '💾 Сохранить' : '✅ Создать фильтр'}
           </button>
         </div>
       </div>
