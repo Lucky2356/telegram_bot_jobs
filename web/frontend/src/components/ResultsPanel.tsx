@@ -1,6 +1,7 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import type { VacancyResult, VacancyFilter, AppConfig } from '../types'
 import VacancyCard from './VacancyCard'
+import VacancyDetail from './VacancyDetail'
 
 interface ResultsPanelProps {
   results: VacancyResult[]
@@ -41,13 +42,7 @@ export default function ResultsPanel({
   const [sourceFilter, setSourceFilter] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('date-desc')
   const [groupBy, setGroupBy] = useState(false)
-
-  useEffect(() => {
-    if (checking) {
-      const timer = setInterval(onRefreshResults, 3000)
-      return () => clearInterval(timer)
-    }
-  }, [checking, onRefreshResults])
+  const [detailVacancy, setDetailVacancy] = useState<VacancyResult | null>(null)
 
   const sources = useMemo(() => {
     const set = new Set(results.map((v) => v.source))
@@ -204,7 +199,7 @@ export default function ResultsPanel({
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                     {siteItems.map((v, idx) => (
                       <div key={`${v.source}-${v.url}-${idx}`} className="animate-fade-in" style={{ animationDelay: `${idx * 20}ms` }}>
-                        <VacancyCard vacancy={v} config={config} />
+                        <VacancyCard vacancy={v} config={config} onDetail={setDetailVacancy} />
                       </div>
                     ))}
                   </div>
@@ -215,12 +210,20 @@ export default function ResultsPanel({
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {processed.map((v, idx) => (
                 <div key={`${v.source}-${v.url}-${idx}`} className="animate-fade-in" style={{ animationDelay: `${idx * 15}ms` }}>
-                  <VacancyCard vacancy={v} config={config} />
+                  <VacancyCard vacancy={v} config={config} onDetail={setDetailVacancy} />
                 </div>
               ))}
             </div>
           )}
         </>
+      )}
+
+      {detailVacancy && (
+        <VacancyDetail
+          vacancy={detailVacancy}
+          config={config}
+          onClose={() => setDetailVacancy(null)}
+        />
       )}
     </div>
   )

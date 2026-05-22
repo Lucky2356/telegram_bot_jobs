@@ -7,6 +7,7 @@ interface VacancyCardProps {
   vacancy: VacancyResult
   config: AppConfig
   showActions?: boolean
+  onDetail?: (vacancy: VacancyResult) => void
 }
 
 const sourceStyles: Record<string, { label: string; color: string; stripe: string }> = {
@@ -17,7 +18,7 @@ const sourceStyles: Record<string, { label: string; color: string; stripe: strin
   habr: { color: 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300', stripe: 'bg-rose-500', label: 'Хабр Карьера' },
 }
 
-const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = true }: VacancyCardProps) {
+const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = true, onDetail }: VacancyCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [blocking, setBlocking] = useState(false)
@@ -74,8 +75,11 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
 
   return (
     <div
-      className="relative bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 hover:shadow-md hover:border-slate-300/80 dark:hover:border-slate-600/60 transition-all duration-200 flex flex-col overflow-hidden group"
+      onClick={() => onDetail?.(vacancy)}
+      onKeyDown={(e) => { if (e.key === 'Enter') onDetail?.(vacancy) }}
+      className="relative bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 hover:shadow-md hover:border-slate-300/80 dark:hover:border-slate-600/60 transition-all duration-200 flex flex-col overflow-hidden group cursor-pointer"
       role="article"
+      tabIndex={0}
       aria-label={`Вакансия: ${vacancy.title}`}
     >
       {/* Accent stripe */}

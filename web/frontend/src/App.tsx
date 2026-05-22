@@ -97,6 +97,37 @@ export default function App() {
   }, [activeTab, fetchFilters, fetchResults, fetchSaved, fetchBlocklist, fetchStats])
 
   const [checkingNow, setCheckingNow] = useState(false)
+  const [currentFilter, setCurrentFilter] = useState<string | null>(null)
+
+  // SSE для real-time обновлений
+  useEffect(() => {
+    const es = new EventSource('/api/events')
+    es.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data)
+        switch (event.type) {
+          case 'check_started':
+            setChecking(true)
+            setCurrentFilter(null)
+            break
+          case 'filter_started':
+            setCurrentFilter(event.filter_name)
+            break
+          case 'filter_done':
+            break
+          case 'sending_started':
+            setCurrentFilter(null)
+            break
+          case 'check_complete':
+            setChecking(false)
+            setCurrentFilter(null)
+            fetchResults()
+            break
+        }
+      } catch { /* ignore */ }
+    }
+    return () => es.close()
+  }, [fetchResults])
 
   const handleCheckNow = async () => {
     setCheckingNow(true)
@@ -104,7 +135,6 @@ export default function App() {
       await api.checkNow()
       toast.success('Проверка запущена!')
       setChecking(true)
-      setTimeout(() => fetchResults(), 2000)
     } catch { toast.error('Ошибка') }
     finally { setCheckingNow(false) }
   }
@@ -165,7 +195,7 @@ export default function App() {
                   disabled={checkingNow}
                   className="px-5 py-2.5 text-sm font-medium bg-primary text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 transition-all cursor-pointer shadow-sm"
                 >
-                  {checkingNow || checking ? '⏳ Проверка...' : '🔍 Проверить сейчас'}
+                  {checkingNow || checking ? (currentFilter ? `⏳ ${currentFilter}` : '⏳ Проверка...') : '🔍 Проверить сейчас'}
                 </button>
                 <button
                   onClick={fetchResults}

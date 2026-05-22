@@ -1,9 +1,10 @@
 import asyncio
+import json
 import os
 import uvicorn
 from pydantic import BaseModel
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from core.config import settings
@@ -254,6 +255,19 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     async def api_delete(filter_id: int):
         await db.delete_filter(filter_id)
         return {"ok": True}
+
+    @app.get("/api/events")
+    async def api_events(request: Request):
+        async def event_generator():
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    event = await scheduler.event_queue.get()
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            except asyncio.CancelledError:
+                pass
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     @app.post("/api/check_now")
     async def api_check_now():

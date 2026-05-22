@@ -21,8 +21,15 @@ class Scheduler:
         self._scrapers: dict[str, BaseScraper] = {}
         self._user_buffers: dict[int, list[tuple[int, str, str, str]]] = {}
         self._lock = asyncio.Lock()
-        self.last_results: dict[int, list[VacancyData]] = {}
+        self.last_results: dict[int, list[tuple[int, str | None, VacancyData]]] = {}
         self.last_results_time: str | None = None
+        self.event_queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=100)
+
+    async def _publish(self, event: dict):
+        try:
+            await self.event_queue.put(event)
+        except asyncio.QueueFull:
+            pass
 
     def get_last_results(self) -> list[dict]:
         """Return cached results from the last check as serializable dicts."""
@@ -80,16 +87,23 @@ class Scheduler:
             self._user_buffers.clear()
             self.last_results.clear()
             self.last_results_time = datetime.now(timezone.utc).isoformat()
+            await self._publish({"type": "check_started"})
             logger.info("Starting single-filter check for filter %s...", filter_id)
             vf = await self.db.get_filter(filter_id)
             if not vf or not vf.active:
                 logger.info("Filter %s not found or inactive.", filter_id)
+                await self._publish({"type": "check_complete", "total_found": 0})
                 return
             user = await self.db.get_user(vf.user_id)
             if not user:
+                await self._publish({"type": "check_complete", "total_found": 0})
                 return
+            await self._publish({"type": "filter_started", "filter_id": vf.id, "filter_name": vf.name})
             await self._check_filter(vf)
+            found = sum(len(v) for v in self._user_buffers.values())
+            await self._publish({"type": "filter_done", "filter_id": vf.id, "filter_name": vf.name, "found": found})
             self._user_buffers.clear()
+            await self._publish({"type": "check_complete", "total_found": found})
             logger.info("Single-filter check completed.")
 
     async def cleanup(self, days: int = 7):
@@ -107,14 +121,24 @@ class Scheduler:
             self.last_results.clear()
             self.last_results_time = datetime.now(timezone.utc).isoformat()
             logger.info("Starting vacancy check...")
+            await self._publish({"type": "check_started"})
             filters = await self.db.get_all_active_filters()
             if not filters:
                 logger.info("No active filters, skipping check.")
+                await self._publish({"type": "check_complete", "total_found": 0})
                 return
 
+            total_found = 0
             for vf in filters:
+                await self._publish({"type": "filter_started", "filter_id": vf.id, "filter_name": vf.name})
+                before = sum(len(v) for v in self._user_buffers.values())
                 await self._check_filter(vf)
+                after = sum(len(v) for v in self._user_buffers.values())
+                found = after - before
+                total_found += found
+                await self._publish({"type": "filter_done", "filter_id": vf.id, "filter_name": vf.name, "found": found})
 
+            await self._publish({"type": "sending_started", "total": total_found})
             for user_id, items in self._user_buffers.items():
                 if not items:
                     continue
@@ -144,6 +168,7 @@ class Scheduler:
                         logger.warning("Failed to send vacancy %s: %s", vac_id, e)
 
             self._user_buffers.clear()
+            await self._publish({"type": "check_complete", "total_found": total_found})
             logger.info("Vacancy check completed.")
 
     async def _check_filter(self, vf):
