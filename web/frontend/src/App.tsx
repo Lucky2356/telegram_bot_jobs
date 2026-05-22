@@ -46,7 +46,7 @@ export default function App() {
   const toggleTheme = () => setDark((prev) => !prev)
 
   const fetchConfig = useCallback(async () => {
-    try { setConfig(await api.getConfig()) } catch { console.error('config fail') }
+    try { setConfig(await api.getConfig()) } catch { /* ignore */ }
   }, [])
 
   const fetchStatus = useCallback(async () => {
@@ -67,15 +67,15 @@ export default function App() {
       setResults(data.items)
       setCheckedAt(data.checked_at)
       setChecking(data.checking)
-    } catch { toast.error('Ошибка загрузки результатов') }
+    } catch { /* ignore */ }
   }, [])
 
   const fetchSaved = useCallback(async () => {
-    try { setSaved(await api.getSaved()) } catch { toast.error('Ошибка загрузки избранного') }
+    try { setSaved(await api.getSaved()) } catch { /* ignore */ }
   }, [])
 
   const fetchBlocklist = useCallback(async () => {
-    try { setBlocklist(await api.getBlocklist()) } catch { toast.error('Ошибка загрузки блок-листа') }
+    try { setBlocklist(await api.getBlocklist()) } catch { /* ignore */ }
   }, [])
 
   useEffect(() => { fetchConfig(); fetchStatus() }, [fetchConfig, fetchStatus])
@@ -95,116 +95,107 @@ export default function App() {
       toast.success('Проверка запущена!')
       setChecking(true)
       setTimeout(() => fetchResults(), 2000)
-    } catch { toast.error('Ошибка запуска проверки') }
+    } catch { toast.error('Ошибка') }
     finally { setCheckingNow(false) }
   }
 
   const handleRefresh = useCallback(() => {
-    fetchFilters()
-    fetchResults()
-    fetchStats()
-    fetchSaved()
-    fetchBlocklist()
+    fetchFilters(); fetchResults(); fetchStats(); fetchSaved(); fetchBlocklist()
   }, [fetchFilters, fetchResults, fetchStats, fetchSaved, fetchBlocklist])
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <div className="max-w-6xl mx-auto px-4 py-5">
-        {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-3 mb-2">
-          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">🔍 Job Bot</h1>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setCreateOpen(true); setSelectedFilterId(null) }}
-              className="px-3 py-1.5 text-xs font-medium border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
-            >
-              ➕ Фильтр
-            </button>
-            <button
-              onClick={toggleTheme}
-              className="px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
-              aria-label={dark ? 'Светлая тема' : 'Тёмная тема'}
-            >
-              {dark ? '☀️' : '🌙'}
-            </button>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      {/* Sticky glass header */}
+      <div className="sticky top-0 z-30 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border-b border-slate-200/60 dark:border-slate-700/40">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+                🔍 Job Bot
+              </h1>
+              <StatusBar status={status} />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setCreateOpen(true); setSelectedFilterId(null) }}
+                className="px-3.5 py-2 text-xs font-medium bg-primary/10 text-primary rounded-xl hover:bg-primary hover:text-white transition-all cursor-pointer"
+              >
+                ➕ Фильтр
+              </button>
+              <button
+                onClick={toggleTheme}
+                className="px-3 py-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-slate-500 dark:text-slate-400"
+                aria-label={dark ? 'Светлая тема' : 'Тёмная тема'}
+              >
+                {dark ? '☀️' : '🌙'}
+              </button>
+            </div>
           </div>
+
+          {/* Tabs */}
+          <Tabs tabs={TABS} active={activeTab} onTabChange={setActiveTab} />
         </div>
+      </div>
 
-        {/* Status bar */}
-        <StatusBar status={status} />
-
-        {/* Tabs */}
-        <Tabs tabs={TABS} active={activeTab} onTabChange={setActiveTab} />
-
-        {/* Search tab */}
+      {/* Content */}
+      <div className="max-w-7xl mx-auto px-4 py-5">
         {activeTab === 'search' && config && (
           <div className="space-y-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-3.5">
-              <FiltersPanel
-                filters={filters}
-                config={config}
-                selectedId={selectedFilterId}
-                onSelect={setSelectedFilterId}
-                onRefresh={handleRefresh}
-              />
+            <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 p-4">
+              <FiltersPanel filters={filters} config={config} selectedId={selectedFilterId} onSelect={setSelectedFilterId} onRefresh={handleRefresh} />
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 onClick={handleCheckNow}
                 disabled={checkingNow}
-                className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 transition-all cursor-pointer shadow-sm"
+                className="px-5 py-2.5 text-sm font-medium bg-primary text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 transition-all cursor-pointer shadow-sm"
               >
                 {checkingNow || checking ? '⏳ Проверка...' : '🔍 Проверить сейчас'}
               </button>
               <button
                 onClick={fetchResults}
-                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                className="px-4 py-2.5 text-sm border border-slate-200/60 dark:border-slate-700/40 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-slate-600 dark:text-slate-400"
               >
                 🔄 Обновить
               </button>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 p-4">
               <ResultsPanel
-                results={results}
-                config={config}
-                checkedAt={checkedAt}
-                checking={checking}
-                filters={filters}
-                selectedFilterId={selectedFilterId}
-                onRefreshResults={fetchResults}
+                results={results} config={config} checkedAt={checkedAt} checking={checking}
+                filters={filters} selectedFilterId={selectedFilterId} onRefreshResults={fetchResults}
               />
             </div>
           </div>
         )}
 
-        {/* History */}
         {activeTab === 'history' && config && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 p-4">
             <HistoryPanel config={config} />
           </div>
         )}
 
-        {/* Saved tab */}
         {activeTab === 'saved' && config && (
           <div className="space-y-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">📌 Сохранённые вакансии</h2>
+            <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 p-4">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">📌 Сохранённые вакансии</h2>
               <SavedPanel saved={saved} config={config} />
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">🚫 Блок-лист</h2>
+            <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 p-4">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">🚫 Блок-лист</h2>
               <BlocklistPanel items={blocklist} onRefresh={fetchBlocklist} />
             </div>
           </div>
         )}
 
-        {/* Stats */}
         {activeTab === 'stats' && stats && <StatsPanel stats={stats} />}
 
         {!config && (
-          <div className="text-center py-20 text-gray-400"><p>Загрузка...</p></div>
+          <div className="text-center py-20 text-slate-400">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent" />
+            <p className="mt-3 text-sm">Загрузка...</p>
+          </div>
         )}
       </div>
 

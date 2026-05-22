@@ -90,6 +90,11 @@ class Scheduler:
             self._user_buffers.clear()
             logger.info("Single-filter check completed.")
 
+    async def cleanup(self, days: int = 7):
+        logger.info("Cleaning up vacancies older than %d days...", days)
+        await self.db.cleanup_old_vacancies(days)
+        logger.info("Cleanup completed.")
+
     async def run_check(self):
         if self._lock.locked():
             logger.info("Check already running, skipping.")

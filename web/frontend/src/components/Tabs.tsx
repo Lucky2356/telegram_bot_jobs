@@ -6,14 +6,11 @@ interface TabsProps {
 
 export default function Tabs({ tabs, active, onTabChange }: TabsProps) {
   const handleKeyDown = (key: string) => (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      onTabChange(key)
-    }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTabChange(key) }
   }
 
   return (
-    <div className="flex gap-1 mb-6" role="tablist">
+    <div className="flex gap-6 border-b border-slate-200 dark:border-slate-700/50 mb-5" role="tablist">
       {tabs.map((tab) => (
         <button
           key={tab.key}
@@ -23,10 +20,10 @@ export default function Tabs({ tabs, active, onTabChange }: TabsProps) {
           tabIndex={0}
           onClick={() => onTabChange(tab.key)}
           onKeyDown={handleKeyDown(tab.key)}
-          className={`px-5 py-2.5 text-sm font-medium rounded-xl transition-all cursor-pointer ${
+          className={`pb-2.5 text-sm font-medium border-b-2 transition-all cursor-pointer ${
             active === tab.key
-              ? 'bg-primary text-white shadow-sm'
-              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              ? 'border-primary text-primary dark:border-primary dark:text-primary'
+              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
           }`}
         >
           {tab.label}

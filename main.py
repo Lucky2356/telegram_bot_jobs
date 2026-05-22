@@ -46,8 +46,17 @@ async def main():
         id="vacancy_check",
         replace_existing=True,
     )
+    aps.add_job(
+        scheduler_obj.cleanup,
+        "cron",
+        hour=3,
+        minute=0,
+        id="db_cleanup",
+        replace_existing=True,
+    )
     aps.start()
     logger.info("Scheduler started (every %d hours)", settings.CHECK_INTERVAL_HOURS)
+    logger.info("DB cleanup scheduled daily at 03:00")
 
     logger.info("Starting Telegram bot polling...")
     try:

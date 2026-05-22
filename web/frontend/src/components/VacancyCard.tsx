@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import type { VacancyResult, AppConfig } from '../types'
-import { api } from '../api'
-import { toast } from './Toast'
 
 interface VacancyCardProps {
   vacancy: VacancyResult
@@ -9,22 +7,17 @@ interface VacancyCardProps {
   showActions?: boolean
 }
 
-const sourceColors: Record<string, string> = {
-  hh: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-  superjob: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
-  trudvsem: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
-  rabota: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-  habr: 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300 border-rose-200 dark:border-rose-800',
-}
-
-const sourceLabels: Record<string, string> = {
-  hh: 'hh.ru', superjob: 'SuperJob', trudvsem: 'Работа России',
-  rabota: 'rabota.ru', habr: 'Хабр Карьера',
+const sourceStyles: Record<string, { label: string; color: string; stripe: string }> = {
+  hh: { label: 'hh.ru', color: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300', stripe: 'bg-blue-500' },
+  superjob: { color: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300', stripe: 'bg-cyan-500', label: 'SuperJob' },
+  trudvsem: { color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300', stripe: 'bg-emerald-500', label: 'Работа России' },
+  rabota: { color: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300', stripe: 'bg-amber-500', label: 'rabota.ru' },
+  habr: { color: 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300', stripe: 'bg-rose-500', label: 'Хабр Карьера' },
 }
 
 export default function VacancyCard({ vacancy, config, showActions = true }: VacancyCardProps) {
   const [expanded, setExpanded] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const src = vacancy.source ? sourceStyles[vacancy.source] : null
 
   const empLabel = vacancy.employment_type
     ? config.employment_types[vacancy.employment_type] || vacancy.employment_type
@@ -49,125 +42,101 @@ export default function VacancyCard({ vacancy, config, showActions = true }: Vac
       ? vacancy.description.slice(0, 180).split(' ').slice(0, -1).join(' ') + '...'
       : vacancy.description
 
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      await api.checkNow()
-      toast.success('Сохранено!')
-    } catch { toast.error('Ошибка') }
-    finally { setSaving(false) }
-  }
-
-  const handleBlock = () => {
-    toast.info('Блокировка пока только в Telegram')
-  }
-
   return (
     <div
-      className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 flex flex-col"
+      className="relative bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 hover:shadow-md hover:border-slate-300/80 dark:hover:border-slate-600/60 transition-all duration-200 flex flex-col overflow-hidden group"
       role="article"
       aria-label={`Вакансия: ${vacancy.title}`}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2 mb-2.5">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-snug line-clamp-2 flex-1">
-          {vacancy.title}
-        </h3>
-        {vacancy.source && (
-          <span className={`shrink-0 px-2 py-0.5 text-[10px] font-semibold rounded-md border ${
-            sourceColors[vacancy.source] || 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border-gray-200'
-          }`}>
-            {sourceLabels[vacancy.source] || vacancy.source}
-          </span>
-        )}
-      </div>
+      {/* Accent stripe */}
+      {src && <div className={`absolute top-0 left-0 w-1 h-full ${src.stripe} opacity-40`} />}
 
-      {/* Company + City + Time */}
-      <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mb-2.5 flex-wrap">
-        {vacancy.company && (
-          <span className="flex items-center gap-1.5">
-            <span className="text-gray-400">🏢</span>
-            <span className="font-medium text-gray-600 dark:text-gray-300">{vacancy.company}</span>
-          </span>
-        )}
-        {vacancy.city && (
-          <span className="flex items-center gap-1.5">
-            <span className="text-gray-400">📍</span>{vacancy.city}
-          </span>
-        )}
-        {timeAgo && <span className="flex items-center gap-1.5 ml-auto text-gray-400 dark:text-gray-500">🕐 {timeAgo}</span>}
-      </div>
-
-      {/* Salary */}
-      {vacancy.salary_text && (
-        <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mb-2.5 bg-emerald-50 dark:bg-emerald-900/10 px-3 py-1 rounded-md inline-block">
-          💰 {vacancy.salary_text}
-        </div>
-      )}
-
-      {/* Employment + Experience */}
-      {(empLabel || vacancy.experience) && (
-        <div className="flex flex-wrap gap-1.5 mb-2.5">
-          {empLabel && (
-            <span className="px-2.5 py-0.5 text-[11px] rounded-md bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 font-medium">
-              👔 {empLabel}
-            </span>
-          )}
-          {vacancy.experience && (
-            <span className="px-2.5 py-0.5 text-[11px] rounded-md bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 font-medium">
-              💼 {config.experiences[vacancy.experience] || vacancy.experience}
+      <div className="p-4 pl-5 flex flex-col flex-1">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2 mb-2.5">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 flex-1">
+            {vacancy.title}
+          </h3>
+          {src && (
+            <span className={`shrink-0 px-2.5 py-1 text-[10px] font-semibold rounded-lg ${src.color}`}>
+              {src.label}
             </span>
           )}
         </div>
-      )}
 
-      {/* Description */}
-      {desc && (
-        <div className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mb-2">
-          📋 {desc}
-          {descTruncated && (
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="ml-1 text-primary hover:underline font-medium cursor-pointer"
-              aria-label={expanded ? 'Свернуть' : 'Показать ещё'}
+        {/* Company + City + Time */}
+        <div className="flex items-center gap-2.5 text-xs text-slate-500 dark:text-slate-400 mb-2.5 flex-wrap">
+          {vacancy.company && (
+            <span className="flex items-center gap-1.5">
+              <span>🏢</span>
+              <span className="font-medium text-slate-700 dark:text-slate-300">{vacancy.company}</span>
+            </span>
+          )}
+          {vacancy.city && (
+            <span className="flex items-center gap-1.5">📍 {vacancy.city}</span>
+          )}
+          {timeAgo && <span className="flex items-center gap-1.5 ml-auto text-slate-400 dark:text-slate-500">🕐 {timeAgo}</span>}
+        </div>
+
+        {/* Salary */}
+        {vacancy.salary_text && (
+          <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mb-2.5 bg-emerald-50/70 dark:bg-emerald-900/15 px-3 py-1 rounded-lg inline-block">
+            💰 {vacancy.salary_text}
+          </div>
+        )}
+
+        {/* Employment + Experience */}
+        {(empLabel || vacancy.experience) && (
+          <div className="flex flex-wrap gap-1.5 mb-2.5">
+            {empLabel && <span className="px-2.5 py-1 text-[11px] rounded-lg bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400 font-medium">👔 {empLabel}</span>}
+            {vacancy.experience && <span className="px-2.5 py-1 text-[11px] rounded-lg bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400 font-medium">💼 {config.experiences[vacancy.experience] || vacancy.experience}</span>}
+          </div>
+        )}
+
+        {/* Description */}
+        {desc && (
+          <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-2.5">
+            📋 {desc}
+            {descTruncated && (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="ml-1 text-primary hover:underline font-medium cursor-pointer"
+              >
+                {expanded ? 'свернуть' : 'показать ещё'}
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="flex-1" />
+
+        {/* Actions */}
+        {showActions && (
+          <div className="flex items-center gap-2 mt-2 pt-3 border-t border-slate-100 dark:border-slate-700/40">
+            <a
+              href={vacancy.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-primary bg-primary/5 border border-primary/20 rounded-xl hover:bg-primary hover:text-white transition-all"
+              aria-label={`Открыть ${vacancy.title}`}
             >
-              {expanded ? 'свернуть' : 'показать ещё'}
+              🔗 Открыть
+            </a>
+            <button
+              className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700/60 hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-500 dark:text-slate-400 transition-all cursor-pointer"
+              aria-label="Сохранить"
+            >
+              📌
             </button>
-          )}
-        </div>
-      )}
-
-      <div className="flex-1" />
-
-      {/* Actions */}
-      {showActions && (
-        <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-gray-100 dark:border-gray-700">
-          <a
-            href={vacancy.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium text-primary border border-primary/30 rounded-lg hover:bg-primary hover:text-white transition-all"
-            aria-label={`Открыть ${vacancy.title}`}
-          >
-            🔗 Открыть
-          </a>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-3 py-2 text-xs font-medium border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-all cursor-pointer disabled:opacity-50"
-            aria-label="Сохранить вакансию"
-          >
-            📌
-          </button>
-          <button
-            onClick={handleBlock}
-            className="px-3 py-2 text-xs border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/10 text-gray-400 hover:text-red-500 transition-all cursor-pointer"
-            aria-label="Не интересует"
-          >
-            🚫
-          </button>
-        </div>
-      )}
+            <button
+              className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700/60 hover:bg-red-50 dark:hover:bg-red-900/10 text-slate-400 hover:text-red-500 transition-all cursor-pointer"
+              aria-label="Не интересует"
+            >
+              🚫
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

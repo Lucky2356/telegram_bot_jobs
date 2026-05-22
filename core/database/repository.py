@@ -284,6 +284,29 @@ class Database:
             result = await session.execute(select(Blocklist).order_by(Blocklist.type, Blocklist.pattern))
             return list(result.scalars().all())
 
+    async def cleanup_old_vacancies(self, days: int = 7):
+        from datetime import datetime, timezone, timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        async with self.session_factory() as session:
+            # Get IDs of old vacancies
+            old = await session.execute(
+                select(Vacancy.id).where(Vacancy.created_at < cutoff)
+            )
+            old_ids = [row[0] for row in old.all()]
+            if not old_ids:
+                return
+            # Delete cascade
+            await session.execute(
+                delete(SentVacancy).where(SentVacancy.vacancy_id.in_(old_ids))
+            )
+            await session.execute(
+                delete(SavedVacancy).where(SavedVacancy.vacancy_id.in_(old_ids))
+            )
+            await session.execute(
+                delete(Vacancy).where(Vacancy.id.in_(old_ids))
+            )
+            await session.commit()
+
     async def get_recent_vacancies(self, limit: int = 50) -> list[Vacancy]:
         async with self.session_factory() as session:
             result = await session.execute(
