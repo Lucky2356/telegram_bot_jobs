@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import type { VacancyResult, AppConfig } from '../types'
 
 interface VacancyCardProps {
@@ -15,7 +15,7 @@ const sourceStyles: Record<string, { label: string; color: string; stripe: strin
   habr: { color: 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300', stripe: 'bg-rose-500', label: 'Хабр Карьера' },
 }
 
-export default function VacancyCard({ vacancy, config, showActions = true }: VacancyCardProps) {
+const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = true }: VacancyCardProps) {
   const [expanded, setExpanded] = useState(false)
   const src = vacancy.source ? sourceStyles[vacancy.source] : null
 
@@ -139,4 +139,6 @@ export default function VacancyCard({ vacancy, config, showActions = true }: Vac
       </div>
     </div>
   )
-}
+})
+
+export default VacancyCard

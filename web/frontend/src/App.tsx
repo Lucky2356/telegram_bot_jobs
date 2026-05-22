@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import type { VacancyFilter, Stats, AppConfig, VacancyResult, SavedVacancy, BlocklistItem, ParserStatus } from './types'
 import { api } from './api'
 import Tabs from './components/Tabs'
 import FiltersPanel from './components/FiltersPanel'
 import ResultsPanel from './components/ResultsPanel'
 import HistoryPanel from './components/HistoryPanel'
-import StatsPanel from './components/StatsPanel'
+const StatsPanel = lazy(() => import('./components/StatsPanel'))
 import SavedPanel from './components/SavedPanel'
 import BlocklistPanel from './components/BlocklistPanel'
 import StatusBar from './components/StatusBar'
@@ -18,6 +18,13 @@ const TABS = [
   { key: 'saved', label: '📁 Избранное' },
   { key: 'stats', label: '📊 Статистика' },
 ]
+
+const loadingSpinner = (
+  <div className="text-center py-20 text-slate-400">
+    <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent" />
+    <p className="mt-3 text-sm">Загрузка...</p>
+  </div>
+)
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null)
@@ -33,14 +40,16 @@ export default function App() {
   const [selectedFilterId, setSelectedFilterId] = useState<number | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem('theme')
-    if (saved) return saved === 'dark'
+    try {
+      const saved = localStorage.getItem('theme')
+      if (saved) return saved === 'dark'
+    } catch { /* ignore */ }
     return window.matchMedia('(prefers-color-scheme: dark)').matches
   })
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
-    localStorage.setItem('theme', dark ? 'dark' : 'light')
+    try { localStorage.setItem('theme', dark ? 'dark' : 'light') } catch { /* ignore */ }
   }, [dark])
 
   const toggleTheme = () => setDark((prev) => !prev)
@@ -102,6 +111,9 @@ export default function App() {
   const handleRefresh = useCallback(() => {
     fetchFilters(); fetchResults(); fetchStats(); fetchSaved(); fetchBlocklist()
   }, [fetchFilters, fetchResults, fetchStats, fetchSaved, fetchBlocklist])
+
+  const handleCloseFilter = useCallback(() => setCreateOpen(false), [])
+  const handleSavedFilter = useCallback(() => { handleRefresh(); fetchResults() }, [handleRefresh, fetchResults])
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -189,22 +201,21 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'stats' && stats && <StatsPanel stats={stats} />}
-
-        {!config && (
-          <div className="text-center py-20 text-slate-400">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent" />
-            <p className="mt-3 text-sm">Загрузка...</p>
-          </div>
+        {activeTab === 'stats' && stats && (
+          <Suspense fallback={<div className="text-center py-20 text-slate-400"><p className="text-sm">Загрузка графиков...</p></div>}>
+            <StatsPanel stats={stats} />
+          </Suspense>
         )}
+
+        {!config && loadingSpinner}
       </div>
 
       {createOpen && config && (
         <FilterModal
           config={config}
           filter={null}
-          onClose={() => setCreateOpen(false)}
-          onSaved={() => { handleRefresh(); fetchResults() }}
+          onClose={handleCloseFilter}
+          onSaved={handleSavedFilter}
         />
       )}
 

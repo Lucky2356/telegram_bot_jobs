@@ -63,20 +63,26 @@ export default function ResultsPanel({
       )
     }
     if (sourceFilter) items = items.filter((v) => v.source === sourceFilter)
-    items.sort((a, b) => {
-      if (sortKey === 'date-desc' || sortKey === 'date-asc') {
+    if (sortKey === 'date-desc' || sortKey === 'date-asc') {
+      items = items.toSorted((a, b) => {
         const da = a.published_at ? new Date(a.published_at).getTime() : 0
         const db = b.published_at ? new Date(b.published_at).getTime() : 0
         return sortKey === 'date-desc' ? db - da : da - db
-      }
-      const extractSalary = (v: VacancyResult) => {
+      })
+    } else {
+      const salaryMap = new Map<VacancyResult, number>()
+      for (const v of items) {
         const nums = v.salary_text?.match(/\d[\d\s]*/g)
-        if (!nums) return 0
+        if (!nums) { salaryMap.set(v, 0); continue }
         const vals = nums.map((n) => parseInt(n.replace(/\s/g, '')))
-        return vals.reduce((a, b) => Math.max(a, b), 0)
+        salaryMap.set(v, vals.reduce((a, b) => Math.max(a, b), 0))
       }
-      return sortKey === 'salary-desc' ? extractSalary(b) - extractSalary(a) : extractSalary(a) - extractSalary(b)
-    })
+      items = items.toSorted((a, b) => {
+        const sa = salaryMap.get(a)!
+        const sb = salaryMap.get(b)!
+        return sortKey === 'salary-desc' ? sb - sa : sa - sb
+      })
+    }
     return items
   }, [results, search, sourceFilter, sortKey])
 
@@ -87,7 +93,7 @@ export default function ResultsPanel({
       const key = config.sites[v.source] || v.source
       ;(map[key] ??= []).push(v)
     }
-    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
+    return Object.entries(map).toSorted(([a], [b]) => a.localeCompare(b))
   }, [processed, groupBy, config.sites])
 
   const selectedFilter = filters.find((f) => f.id === selectedFilterId)

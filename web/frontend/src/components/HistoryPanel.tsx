@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import type { HistoryItem, AppConfig } from '../types'
 import { api } from '../api'
 import { toast } from './Toast'
@@ -87,9 +87,11 @@ export default function HistoryPanel({ config }: HistoryPanelProps) {
 
   const groups = useMemo(() => groupByDate(filtered), [filtered])
 
-  if (items.length === 0 && !loading) {
-    fetchPage(1)
-  }
+  useEffect(() => {
+    if (items.length === 0 && !loading) {
+      fetchPage(1)
+    }
+  }, [])
 
   if (items.length === 0 && loading) {
     return (
