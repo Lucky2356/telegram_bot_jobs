@@ -49,12 +49,12 @@ async def on_vacancy_similar(callback: CallbackQuery, state: FSMContext, db: Dat
     async with db.session_factory() as session:
         result = await session.execute(select(Vacancy).where(Vacancy.id == vacancy_id))
         vac = result.scalar_one_or_none()
+        if not vac:
+            await callback.answer("Вакансия не найдена", show_alert=True)
+            return
+        words = vac.title.replace("/", " ").replace("-", " ").split()
+        company_was = vac.company
 
-    if not vac:
-        await callback.answer("Вакансия не найдена", show_alert=True)
-        return
-
-    words = vac.title.replace("/", " ").replace("-", " ").split()
     keywords = [w for w in words if len(w) > 2][:5]
 
     await state.update_data(
@@ -66,6 +66,7 @@ async def on_vacancy_similar(callback: CallbackQuery, state: FSMContext, db: Dat
         salary_min=None,
         salary_max=None,
         employment_types=[],
+        experience=None,
         sites=["hh", "superjob", "rabota", "habr", "trudvsem"],
     )
     await state.set_state(FilterWizard.confirm)

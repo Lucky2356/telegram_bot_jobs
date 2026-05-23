@@ -14,7 +14,6 @@ class WizardAction(StrEnum):
     CITY_SELECT = "city"
     CITY_DONE_SKIP = "city_done"
     EXPERIENCE_SELECT = "exp"
-    EXPERIENCE_DONE = "exp_done"
     SALARY_SELECT = "sal"
     EMPLOYMENT_TOGGLE = "emp"
     EMPLOYMENT_DONE = "emp_done"
@@ -353,12 +352,6 @@ def build_keywords_for_group_keyboard(group: str, selected: list[str]) -> Inline
     builder.row(_btn("❌ Отмена", WizardAction.CANCEL))
     return builder.as_markup()
 
-
-def build_keywords_keyboard(selected: list[str]) -> InlineKeyboardMarkup:
-    return _build_keyword_grid(
-        selected, WizardAction.KEYWORD_TOGGLE, WizardAction.KEYWORD_DONE,
-        "Р”Р°Р»РµРµ в†’",
-    )
 
 
 def build_exclude_keywords_keyboard(selected: list[str]) -> InlineKeyboardMarkup:

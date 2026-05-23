@@ -159,9 +159,9 @@ async def on_exclude_toggle(callback: CallbackQuery, state: FSMContext):
     else:
         excluded.append(kw)
     await state.update_data(excluded_keywords=excluded)
-    await _safe_edit(callback.message, reply_markup=build_exclude_keywords_keyboard(excluded)
-    )
-    await callback.answer()
+    await _safe_edit(callback.message, reply_markup=build_exclude_keywords_keyboard(excluded))
+    action = "🚫 исключено" if kw in excluded else "✅ исключено"
+    await callback.answer(action)
 
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.EXCLUDE_DONE))
