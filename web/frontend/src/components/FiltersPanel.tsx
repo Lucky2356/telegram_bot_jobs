@@ -100,9 +100,9 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(f.id) }}}
           >
             <span className={`w-1.5 h-1.5 rounded-full ${f.active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
-            <span className={!f.active ? 'line-through' : ''}>{f.name}</span>
+            <span className={`${!f.active ? 'line-through' : ''} max-w-[120px] truncate`}>{f.name}</span>
 
-            <div className="flex md:group-hover:flex items-center gap-0.5 ml-1">
+            <div className="flex md:group-hover:flex items-center gap-0.5 ml-1 shrink-0">
               {f.active && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleCheckOne(f.id) }}
