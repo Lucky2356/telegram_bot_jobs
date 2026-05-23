@@ -92,7 +92,7 @@ export default function HistoryPanel({ config }: HistoryPanelProps) {
     if (items.length === 0 && !loading) {
       fetchPage(1)
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!hasMore || loading) return

@@ -208,12 +208,12 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
                     ))}
                   </div>
                 )}
-                {Object.values(config.keyword_groups).map((items) =>
+                {Object.entries(config.keyword_groups).map(([group, items]) =>
                   Object.keys(items).map((kw) => {
                     const sel = form.exclude_keywords.includes(kw)
                     return (
                       <button
-                        key={`ex-${kw}`}
+                        key={`${group}-${kw}`}
                         onClick={() => toggleExclude(kw)}
                         className={`px-2.5 py-1 text-xs rounded-lg border transition-all cursor-pointer mr-1 mb-1 ${
                           sel

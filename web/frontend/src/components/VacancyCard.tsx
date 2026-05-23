@@ -70,9 +70,15 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
   }
 
   const descTruncated = (vacancy.description?.length ?? 0) > 150
+  const truncateDesc = (desc: string, maxLen: number) => {
+    if (desc.length <= maxLen) return desc
+    const truncated = desc.slice(0, maxLen)
+    const lastSpace = truncated.lastIndexOf(' ')
+    return (lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated) + '...'
+  }
   const desc = expanded && vacancy.description ? vacancy.description
     : descTruncated && vacancy.description
-      ? vacancy.description.slice(0, 150).split(' ').slice(0, -1).join(' ') + '...'
+      ? truncateDesc(vacancy.description, 150)
       : vacancy.description
 
   const handleCardClick = () => onDetail?.(vacancy)

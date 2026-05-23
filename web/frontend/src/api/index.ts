@@ -18,7 +18,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   if (resp.status === 401) {
     sessionStorage.removeItem('auth_token')
     window.location.reload()
-    throw new Error('Unauthorized')
+    return undefined as T
   }
   if (!resp.ok) {
     const text = await resp.text()
