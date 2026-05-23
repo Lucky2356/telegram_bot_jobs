@@ -36,11 +36,15 @@ class Scheduler:
         except asyncio.QueueFull:
             pass
 
+    MAX_RESULTS = 500
+
     def get_last_results(self) -> list[dict]:
         """Return cached results from the last check as serializable dicts."""
         combined: list[tuple[int, str | None, VacancyData]] = []
         for items in self.last_results.values():
             combined.extend(items)
+        # Keep most recent results capped
+        combined = combined[-self.MAX_RESULTS:]
         from datetime import datetime, timezone
         return [
             {
@@ -90,7 +94,6 @@ class Scheduler:
         async with self._lock:
             from datetime import datetime, timezone
             self._user_buffers.clear()
-            self.last_results.clear()
             self.last_results_time = datetime.now(timezone.utc).isoformat()
             await self._publish({"type": "check_started"})
             logger.info("Starting single-filter check for filter %s...", filter_id)
@@ -107,7 +110,6 @@ class Scheduler:
             await self._check_filter(vf, user)
             found = sum(len(v) for v in self._user_buffers.values())
             await self._publish({"type": "filter_done", "filter_id": vf.id, "filter_name": vf.name, "found": found})
-            self._user_buffers.clear()
             await self._publish({"type": "check_complete", "total_found": found})
             logger.info("Single-filter check completed.")
 
@@ -165,7 +167,6 @@ class Scheduler:
         async with self._lock:
             from datetime import datetime, timezone
             self._user_buffers.clear()
-            self.last_results.clear()
             self.last_results_time = datetime.now(timezone.utc).isoformat()
             logger.info("Starting vacancy check...")
             await self._publish({"type": "check_started"})
