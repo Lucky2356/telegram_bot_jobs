@@ -17,6 +17,7 @@ COPY core/ core/
 COPY scrapers/ scrapers/
 COPY bot/ bot/
 COPY web/ web/
+COPY utils/ utils/
 COPY main.py .
 COPY alembic.ini .
 COPY alembic/ alembic/
