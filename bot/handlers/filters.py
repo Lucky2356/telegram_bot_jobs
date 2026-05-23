@@ -75,6 +75,7 @@ async def on_keyword_group_select(callback: CallbackQuery, state: FSMContext):
     group = _ID_GROUP.get(group_id, group_id)
     data = await state.get_data()
     selected: list[str] = data.get("selected_keywords", [])
+    await state.update_data(current_group=group)
     await _safe_edit(callback.message, text=f"📁 {group}\n\nНажимай на слова, чтобы добавить их в фильтр.",
         reply_markup=build_keywords_for_group_keyboard(group, selected),
     )
@@ -111,6 +112,9 @@ async def on_keyword_toggle(callback: CallbackQuery, state: FSMContext):
         selected.append(kw)
         await callback.answer(f"✅ {kw} добавлено")
     await state.update_data(selected_keywords=selected)
+    current_group = data.get("current_group")
+    if current_group:
+        await _safe_edit(callback.message, reply_markup=build_keywords_for_group_keyboard(current_group, selected))
 
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.NOOP))
@@ -162,6 +166,18 @@ async def on_exclude_toggle(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.EXCLUDE_DONE))
 async def on_exclude_done(callback: CallbackQuery, state: FSMContext):
+    value = FilterCallback.unpack(callback.data).value
+    if value == "__back__":
+        data = await state.get_data()
+        excluded = data.get("excluded_keywords", [])
+        await state.set_state(FilterWizard.exclude_keywords)
+        await _safe_edit(callback.message, text="Выбери слова, которые нужно ИСКЛЮЧИТЬ\n\n"
+            "Если хочешь исключить какие-то технологии или роли, отметь их.\n"
+            "Если нет — просто нажми «Далее».",
+            reply_markup=build_exclude_keywords_keyboard(excluded),
+        )
+        await callback.answer()
+        return
     await state.set_state(FilterWizard.city)
     data = await state.get_data()
     city = data.get("city", None)
@@ -252,7 +268,8 @@ async def on_salary_select(callback: CallbackQuery, state: FSMContext):
     if value == "custom":
         await state.set_state(FilterWizard.custom_salary)
         await _safe_edit(callback.message, text=    "Введи желаемую зарплату цифрой (например: 250000)\n"
-            "Или диапазон через дефис (например: 200000-350000)",
+            "Или диапазон через дефис (например: 200000-350000)\n\n"
+            "Напиши «отмена» чтобы вернуться назад.",
         )
         await callback.answer()
         return
@@ -269,6 +286,14 @@ async def on_salary_select(callback: CallbackQuery, state: FSMContext):
 async def on_custom_salary(message: Message, state: FSMContext):
     if not message.text:
         await message.answer("Пожалуйста, введи число (например: 250000)")
+        return
+    if message.text.strip().lower() == "отмена":
+        data = await state.get_data()
+        salary_key = data.get("salary_key", None)
+        await state.set_state(FilterWizard.salary)
+        await message.answer("Выбери зарплату",
+            reply_markup=build_salary_keyboard(salary_key),
+        )
         return
     text = message.text.strip().replace(" ", "").replace(",", ".")
     import re

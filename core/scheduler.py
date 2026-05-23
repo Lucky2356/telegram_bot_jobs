@@ -214,7 +214,7 @@ class Scheduler:
             if not scraper:
                 continue
             try:
-                vacancies = await scraper.search(keywords=keywords, city=city)
+                vacancies = await scraper.search(keywords=search_terms, city=city)
             except Exception as e:
                 logger.warning("Scraper %s error: %s", site_key, e)
                 continue
@@ -248,13 +248,11 @@ class Scheduler:
             if not vac_data.experience or vac_data.experience != experience:
                 return
         if vf.salary_min is not None or vf.salary_max is not None:
-            if vf.salary_min is not None and vac_data.salary_max is not None and vac_data.salary_max < vf.salary_min:
-                return
-            if vf.salary_max is not None and vac_data.salary_min is not None and vac_data.salary_min > vf.salary_max:
-                return
-            if vf.salary_min is not None and vac_data.salary_min is not None and vac_data.salary_max is None and vac_data.salary_min < vf.salary_min:
-                return
-            if vf.salary_max is not None and vac_data.salary_max is not None and vac_data.salary_min is None and vac_data.salary_max > vf.salary_max:
+            cand_min = vac_data.salary_min or 0
+            cand_max = vac_data.salary_max if vac_data.salary_max is not None else 10**9
+            filt_min = vf.salary_min or 0
+            filt_max = vf.salary_max if vf.salary_max is not None else 10**9
+            if cand_max < filt_min or cand_min > filt_max:
                 return
 
         vac = await self.db.add_vacancy(vac_data)
