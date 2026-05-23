@@ -248,6 +248,10 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     @app.post("/api/filters/{filter_id}/toggle")
     async def api_toggle(filter_id: int):
         active = await db.toggle_filter(filter_id)
+        if active is False:
+            vf = await db.get_filter(filter_id)
+            if vf is None:
+                return JSONResponse({"ok": False, "message": "Filter not found"}, status_code=404)
         return {"ok": True, "active": active}
 
     @app.post("/api/filters/{filter_id}/clone")
@@ -354,6 +358,10 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.post("/api/blocklist/{block_id}/delete")
     async def api_blocklist_delete(block_id: int):
+        user = await _get_first_user(db)
+        blocks = await db.get_blocklist(user.id)
+        if not any(b.id == block_id for b in blocks):
+            return JSONResponse({"ok": False, "message": "Not found"}, status_code=404)
         await db.remove_blocklist_by_id(block_id)
         return {"ok": True}
 
@@ -386,13 +394,19 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             return JSONResponse({"ok": False, "message": "Vacancy not found"}, status_code=404)
         if vac.company:
             await db.add_blocklist(user.id, vac.company, "company")
+        else:
+            await db.add_blocklist(user.id, vac.title, "keyword")
         return {"ok": True}
 
     @app.delete("/api/saved/{saved_id}")
     async def api_saved_delete(saved_id: int):
+        user = await _get_first_user(db)
         sv = await db.get_saved_vacancy_by_id(saved_id)
-        if sv:
-            await db.unsave_vacancy(sv.user_id, sv.vacancy_id)
+        if not sv:
+            return JSONResponse({"ok": False, "message": "Not found"}, status_code=404)
+        if sv.user_id != user.id:
+            return JSONResponse({"ok": False, "message": "Forbidden"}, status_code=403)
+        await db.unsave_vacancy(sv.user_id, sv.vacancy_id)
         return {"ok": True}
 
     @app.get("/api/status")
