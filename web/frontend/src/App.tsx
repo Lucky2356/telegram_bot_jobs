@@ -116,10 +116,10 @@ function applyTelegramThemeParams(themeParams: Record<string, string | undefined
 export default function App() {
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem('auth_token'))
 
-  const handleLogin = (newToken: string) => {
+  const handleLogin = useCallback((newToken: string) => {
     sessionStorage.setItem('auth_token', newToken)
     setToken(newToken)
-  }
+  }, [])
 
   if (!token) {
     return <AuthGate onLogin={handleLogin} />
@@ -254,26 +254,20 @@ function AuthenticatedApp() {
   }, [])
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      void fetchConfig()
-      void fetchStatus()
-    }, 0)
-    return () => clearTimeout(timer)
+    void fetchConfig()
+    void fetchStatus()
   }, [fetchConfig, fetchStatus])
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (activeTab === 'search') {
-        void fetchFilters()
-        void fetchResults()
-      } else if (activeTab === 'saved') {
-        void fetchSaved()
-        void fetchBlocklist()
-      } else if (activeTab === 'stats') {
-        void fetchStats()
-      }
-    }, 0)
-    return () => clearTimeout(timer)
+    if (activeTab === 'search') {
+      void fetchFilters()
+      void fetchResults()
+    } else if (activeTab === 'saved') {
+      void fetchSaved()
+      void fetchBlocklist()
+    } else if (activeTab === 'stats') {
+      void fetchStats()
+    }
   }, [activeTab, fetchFilters, fetchResults, fetchSaved, fetchBlocklist, fetchStats])
 
   useEffect(() => {
