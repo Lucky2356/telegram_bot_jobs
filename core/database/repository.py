@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timezone
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete, func, update
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from core.database.models import Base, User, VacancyFilter, Vacancy, SentVacancy, SavedVacancy, Blocklist
 from scrapers.base import VacancyData
@@ -38,6 +38,80 @@ class Database:
         async with self.session_factory() as session:
             result = await session.execute(select(User).where(User.id == user_id))
             return result.scalar_one_or_none()
+
+    async def get_first_real_user(self) -> User | None:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(User)
+                .where(User.telegram_id != 0)
+                .order_by(User.created_at.asc())
+                .limit(1)
+            )
+            return result.scalar_one_or_none()
+
+    async def merge_user_data(self, source_user_id: int, target_user_id: int):
+        if source_user_id == target_user_id:
+            return
+        async with self.session_factory() as session:
+            source = await session.get(User, source_user_id)
+            target = await session.get(User, target_user_id)
+            if source is None or target is None:
+                return
+
+            await session.execute(
+                update(VacancyFilter)
+                .where(VacancyFilter.user_id == source_user_id)
+                .values(user_id=target_user_id)
+            )
+
+            source_blocks = (
+                await session.execute(select(Blocklist).where(Blocklist.user_id == source_user_id))
+            ).scalars().all()
+            for block in source_blocks:
+                exists = await session.execute(
+                    select(Blocklist.id).where(
+                        Blocklist.user_id == target_user_id,
+                        Blocklist.pattern == block.pattern,
+                        Blocklist.type == block.type,
+                    )
+                )
+                if exists.scalar_one_or_none():
+                    await session.delete(block)
+                else:
+                    block.user_id = target_user_id
+
+            source_saved = (
+                await session.execute(select(SavedVacancy).where(SavedVacancy.user_id == source_user_id))
+            ).scalars().all()
+            for saved in source_saved:
+                exists = await session.execute(
+                    select(SavedVacancy.id).where(
+                        SavedVacancy.user_id == target_user_id,
+                        SavedVacancy.vacancy_id == saved.vacancy_id,
+                    )
+                )
+                if exists.scalar_one_or_none():
+                    await session.delete(saved)
+                else:
+                    saved.user_id = target_user_id
+
+            source_sent = (
+                await session.execute(select(SentVacancy).where(SentVacancy.user_id == source_user_id))
+            ).scalars().all()
+            for sent in source_sent:
+                exists = await session.execute(
+                    select(SentVacancy.id).where(
+                        SentVacancy.user_id == target_user_id,
+                        SentVacancy.vacancy_id == sent.vacancy_id,
+                        SentVacancy.filter_id == sent.filter_id,
+                    )
+                )
+                if exists.scalar_one_or_none():
+                    await session.delete(sent)
+                else:
+                    sent.user_id = target_user_id
+
+            await session.commit()
 
     async def create_filter(
         self, user_id: int, name: str, keywords: list[str],
@@ -168,6 +242,16 @@ class Database:
             await session.refresh(vac)
             return vac
 
+    async def get_vacancy_by_source(self, source: str, source_id: str) -> Vacancy | None:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(Vacancy).where(
+                    Vacancy.source == source,
+                    Vacancy.source_id == source_id,
+                )
+            )
+            return result.scalar_one_or_none()
+
     async def is_sent(self, user_id: int, vacancy_id: int) -> bool:
         async with self.session_factory() as session:
             result = await session.execute(
@@ -207,9 +291,12 @@ class Database:
                 select(Blocklist).where(Blocklist.user_id == user_id)
             )
             for b in blocks.scalars().all():
-                if company and b.pattern.lower() in company.lower():
+                pattern = b.pattern.strip().lower()
+                if not pattern:
+                    continue
+                if b.type == "company" and company and pattern in company.lower():
                     return True
-                if b.pattern.lower() in title.lower():
+                if b.type == "keyword" and pattern in title.lower():
                     return True
         return False
 
@@ -267,19 +354,26 @@ class Database:
             )
             return [{"date": str(row[0]), "count": row[1]} for row in result.all()]
 
-    async def get_saved_vacancies(self) -> list[tuple[SavedVacancy, Vacancy]]:
+    async def get_saved_vacancies(self, user_id: int | None = None) -> list[tuple[SavedVacancy, Vacancy]]:
         async with self.session_factory() as session:
-            result = await session.execute(
+            stmt = (
                 select(SavedVacancy, Vacancy)
                 .join(Vacancy, SavedVacancy.vacancy_id == Vacancy.id)
-                .order_by(SavedVacancy.saved_at.desc())
-                .limit(50)
+            )
+            if user_id is not None:
+                stmt = stmt.where(SavedVacancy.user_id == user_id)
+            stmt = stmt.order_by(SavedVacancy.saved_at.desc()).limit(50)
+            result = await session.execute(
+                stmt
             )
             return list(result.all())
 
-    async def get_blocklist(self) -> list[Blocklist]:
+    async def get_blocklist(self, user_id: int | None = None) -> list[Blocklist]:
         async with self.session_factory() as session:
-            result = await session.execute(select(Blocklist).order_by(Blocklist.type, Blocklist.pattern))
+            stmt = select(Blocklist)
+            if user_id is not None:
+                stmt = stmt.where(Blocklist.user_id == user_id)
+            result = await session.execute(stmt.order_by(Blocklist.type, Blocklist.pattern))
             return list(result.scalars().all())
 
     async def get_vacancy_by_id(self, vacancy_id: int) -> Vacancy | None:

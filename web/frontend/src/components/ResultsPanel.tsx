@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Search, RefreshCw, Layers3 } from 'lucide-react'
 import type { VacancyResult, VacancyFilter, AppConfig } from '../types'
 import VacancyCard from './VacancyCard'
 import VacancyDetail from './VacancyDetail'
@@ -15,20 +16,27 @@ interface ResultsPanelProps {
 
 type SortKey = 'date-desc' | 'date-asc' | 'salary-desc' | 'salary-asc'
 
+function salaryRank(v: VacancyResult) {
+  const nums = v.salary_text?.match(/\d[\d\s]*/g)
+  if (!nums) return 0
+  const values = nums.map((n) => parseInt(n.replace(/\s/g, ''), 10)).filter((n) => !Number.isNaN(n))
+  return values.reduce((acc, item) => Math.max(acc, item), 0)
+}
+
 function SkeletonGrid() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
-          <div className="flex gap-2 mb-3">
-            <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-lg flex-1 animate-skeleton" />
-            <div className="w-16 h-5 bg-slate-200 dark:bg-slate-700 rounded-lg animate-skeleton" />
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, idx) => (
+        <div key={idx} className="bento-card p-4">
+          <div className="skeleton h-4 w-2/3 rounded" />
+          <div className="skeleton mt-2 h-3 w-1/2 rounded" />
+          <div className="skeleton mt-3 h-4 w-1/3 rounded" />
+          <div className="skeleton mt-4 h-16 w-full rounded-xl" />
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="skeleton h-8 rounded-lg" />
+            <div className="skeleton h-8 rounded-lg" />
+            <div className="skeleton h-8 rounded-lg" />
           </div>
-          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-3/4 mb-2 animate-skeleton" />
-          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2 mb-3 animate-skeleton" />
-          <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded-lg mb-2 animate-skeleton" />
-          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-full mb-1 animate-skeleton" />
-          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-2/3 animate-skeleton" />
         </div>
       ))}
     </div>
@@ -36,7 +44,13 @@ function SkeletonGrid() {
 }
 
 export default function ResultsPanel({
-  results, config, checkedAt, checking, filters, selectedFilterId, onRefreshResults,
+  results,
+  config,
+  checkedAt,
+  checking,
+  filters,
+  selectedFilterId,
+  onRefreshResults,
 }: ResultsPanelProps) {
   const [search, setSearch] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
@@ -44,20 +58,27 @@ export default function ResultsPanel({
   const [groupBy, setGroupBy] = useState(false)
   const [detailVacancy, setDetailVacancy] = useState<VacancyResult | null>(null)
 
+  const selectedFilter = filters.find((f) => f.id === selectedFilterId)
+
   const sources = useMemo(() => {
-    const set = new Set(results.map((v) => v.source))
-    return Array.from(set).sort()
+    const sourceSet = new Set(results.map((v) => v.source))
+    return Array.from(sourceSet).sort()
   }, [results])
 
   const processed = useMemo(() => {
     let items = [...results]
+
     if (search) {
       const q = search.toLowerCase()
       items = items.filter((v) =>
-        v.title.toLowerCase().includes(q) || (v.company?.toLowerCase().includes(q) ?? false)
+        v.title.toLowerCase().includes(q)
+        || (v.company?.toLowerCase().includes(q) ?? false)
+        || (v.description?.toLowerCase().includes(q) ?? false),
       )
     }
+
     if (sourceFilter) items = items.filter((v) => v.source === sourceFilter)
+
     if (sortKey === 'date-desc' || sortKey === 'date-asc') {
       items = items.toSorted((a, b) => {
         const da = a.published_at ? new Date(a.published_at).getTime() : 0
@@ -65,159 +86,153 @@ export default function ResultsPanel({
         return sortKey === 'date-desc' ? db - da : da - db
       })
     } else {
-      const salaryMap = new Map<VacancyResult, number>()
-      for (const v of items) {
-        const nums = v.salary_text?.match(/\d[\d\s]*/g)
-        if (!nums) { salaryMap.set(v, 0); continue }
-        const vals = nums.map((n) => parseInt(n.replace(/\s/g, '')))
-        salaryMap.set(v, vals.reduce((a, b) => Math.max(a, b), 0))
-      }
-      items = items.toSorted((a, b) => {
-        const sa = salaryMap.get(a)!
-        const sb = salaryMap.get(b)!
-        return sortKey === 'salary-desc' ? sb - sa : sa - sb
-      })
+      items = items.toSorted((a, b) =>
+        sortKey === 'salary-desc' ? salaryRank(b) - salaryRank(a) : salaryRank(a) - salaryRank(b),
+      )
     }
+
     return items
   }, [results, search, sourceFilter, sortKey])
 
-  const groups = useMemo(() => {
+  const grouped = useMemo(() => {
     if (!groupBy) return null
     const map: Record<string, VacancyResult[]> = {}
-    for (const v of processed) {
-      const key = config.sites[v.source] || v.source
-      ;(map[key] ??= []).push(v)
+    for (const item of processed) {
+      const key = config.sites[item.source] || item.source
+      ;(map[key] ??= []).push(item)
     }
     return Object.entries(map).toSorted(([a], [b]) => a.localeCompare(b))
-  }, [processed, groupBy, config.sites])
-
-  const selectedFilter = filters.find((f) => f.id === selectedFilterId)
+  }, [groupBy, processed, config.sites])
 
   return (
-    <div>
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            {selectedFilter
-              ? <><span className="text-blue-600 dark:text-blue-400">{selectedFilter.name}</span> — {processed.length}</>
-              : <>{processed.length} {processed.length === 1 ? 'вакансия' : processed.length < 5 ? 'вакансии' : 'вакансий'}</>}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-base font-semibold text-primary">
+            {selectedFilter ? selectedFilter.name : 'Все результаты'}
           </h2>
-          {checking && (
-            <span className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-full border border-amber-200 dark:border-amber-800">
-              <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
-              Поиск...
-            </span>
-          )}
+          <p className="mt-1 text-xs text-secondary">
+            Найдено: <span className="code text-primary">{processed.length}</span>
+            {checkedAt && !checking && ` · обновлено ${new Date(checkedAt).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`}
+          </p>
         </div>
-        {checkedAt && !checking && (
-          <span className="text-[10px] text-slate-400">{new Date(checkedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+
+        {checking && (
+          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-primary">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--accent)]" />
+            Идёт проверка
+          </span>
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="🔍 Поиск среди результатов..."
-          className="flex-1 min-w-[160px] h-9 px-3 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-          aria-label="Поиск"
-        />
-        {sources.length > 1 && (
-          <select
-            value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
-            className="h-9 px-3 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-            aria-label="Фильтр по сайту"
-          >
-            <option value="">Все сайты</option>
-            {sources.map((s) => <option key={s} value={s}>{config.sites[s] || s}</option>)}
-          </select>
-        )}
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
+        <div className="relative md:col-span-6">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Поиск по названию, компании или описанию"
+            className="focus-ring h-10 w-full rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] pl-9 pr-3 text-sm text-primary placeholder:text-muted"
+            aria-label="Поиск по результатам"
+          />
+        </div>
+
+        <select
+          value={sourceFilter}
+          onChange={(e) => setSourceFilter(e.target.value)}
+          className="focus-ring h-10 rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] px-3 text-sm text-primary md:col-span-2"
+          aria-label="Фильтр по источнику"
+        >
+          <option value="">Все источники</option>
+          {sources.map((s) => (
+            <option key={s} value={s}>{config.sites[s] || s}</option>
+          ))}
+        </select>
+
         <select
           value={sortKey}
           onChange={(e) => setSortKey(e.target.value as SortKey)}
-          className="h-9 px-3 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-          aria-label="Сортировка"
+          className="focus-ring h-10 rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] px-3 text-sm text-primary md:col-span-2"
+          aria-label="Сортировка результатов"
         >
-          <option value="date-desc">📅 Сначала новые</option>
-          <option value="date-asc">📅 Сначала старые</option>
-          <option value="salary-desc">💰 По убыванию</option>
-          <option value="salary-asc">💰 По возрастанию</option>
+          <option value="date-desc">Сначала новые</option>
+          <option value="date-asc">Сначала старые</option>
+          <option value="salary-desc">Высокая зарплата</option>
+          <option value="salary-asc">Низкая зарплата</option>
         </select>
-        <button
-          onClick={() => setGroupBy(!groupBy)}
-          className={`h-9 px-3 text-xs rounded-lg border transition-all cursor-pointer ${
-            groupBy
-              ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-950 dark:border-white'
-              : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
-          }`}
-          aria-label="Группировать"
-        >
-          📂 Группы
-        </button>
-        <button
-          onClick={onRefreshResults}
-          className="h-9 px-3 text-xs rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
-          aria-label="Обновить"
-        >
-          🔄
-        </button>
+
+        <div className="flex items-center gap-2 md:col-span-2 md:justify-end">
+          <button
+            onClick={() => setGroupBy((prev) => !prev)}
+            className={`focus-ring inline-flex h-10 items-center justify-center gap-1 rounded-xl border px-3 text-sm font-medium transition ${
+              groupBy
+                ? 'border-[var(--border-strong)] bg-[var(--accent-soft)] text-primary'
+                : 'border-[var(--border)] bg-[color:var(--surface-elevated)] text-secondary hover:text-primary'
+            }`}
+            aria-label="Группировать результаты"
+          >
+            <Layers3 className="h-4 w-4" />
+            Группы
+          </button>
+          <button
+            onClick={onRefreshResults}
+            className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] text-secondary transition hover:text-primary"
+            aria-label="Обновить результаты"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {results.length === 0 && checking && <SkeletonGrid />}
 
       {results.length === 0 && !checking && (
-        <div className="text-center py-16 text-slate-400">
-          <p className="text-base mb-1">🔍 Ничего не найдено</p>
-          <p className="text-sm">Нажми «Проверить» или измени фильтры</p>
+        <div className="bento-card p-8 text-center">
+          <p className="text-base font-medium text-primary">Пока нет найденных вакансий</p>
+          <p className="mt-2 text-sm text-secondary">Запустите проверку или расширьте фильтры, чтобы увидеть первую подборку.</p>
         </div>
       )}
 
       {results.length > 0 && processed.length === 0 && !checking && (
-        <div className="text-center py-8 text-slate-400">
-          <p className="text-sm">Ничего не найдено по вашему запросу</p>
+        <div className="bento-card p-8 text-center">
+          <p className="text-base font-medium text-primary">Ничего не найдено по текущему запросу</p>
+          <p className="mt-2 text-sm text-secondary">Сбросьте часть фильтров или измените текст поиска.</p>
         </div>
       )}
 
       {processed.length > 0 && (
-        <>
-          {groups ? (
-            <div className="space-y-5">
-              {groups.map(([site, siteItems]) => (
-                <div key={site}>
-                  <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <span>{site}</span>
-                    <span className="text-slate-300 dark:text-slate-600 font-normal">{siteItems.length}</span>
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                    {siteItems.map((v, idx) => (
-                      <div key={`${v.source}-${v.url}`} className="animate-fade-in" style={{ animationDelay: `${idx * 20}ms` }}>
-                        <VacancyCard vacancy={v} config={config} onDetail={setDetailVacancy} />
-                      </div>
-                    ))}
-                  </div>
+        grouped ? (
+          <div className="space-y-5">
+            {grouped.map(([sourceName, items]) => (
+              <section key={sourceName} className="space-y-3">
+                <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                  <span>{sourceName}</span>
+                  <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] text-secondary">{items.length}</span>
+                </h3>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {items.map((vacancy, idx) => (
+                    <div key={`${vacancy.source}-${vacancy.url}`} className="animate-fade-in-up" style={{ animationDelay: `${idx * 22}ms` }}>
+                      <VacancyCard vacancy={vacancy} config={config} onDetail={setDetailVacancy} />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {processed.map((v, idx) => (
-                <div key={`${v.source}-${v.url}`} className="animate-fade-in" style={{ animationDelay: `${idx * 15}ms` }}>
-                  <VacancyCard vacancy={v} config={config} onDetail={setDetailVacancy} />
-                </div>
-              ))}
-            </div>
-          )}
-        </>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {processed.map((vacancy, idx) => (
+              <div key={`${vacancy.source}-${vacancy.url}`} className="animate-fade-in-up" style={{ animationDelay: `${idx * 18}ms` }}>
+                <VacancyCard vacancy={vacancy} config={config} onDetail={setDetailVacancy} />
+              </div>
+            ))}
+          </div>
+        )
       )}
 
       {detailVacancy && (
-        <VacancyDetail
-          vacancy={detailVacancy}
-          config={config}
-          onClose={() => setDetailVacancy(null)}
-        />
+        <VacancyDetail vacancy={detailVacancy} config={config} onClose={() => setDetailVacancy(null)} />
       )}
     </div>
   )

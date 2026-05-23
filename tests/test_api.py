@@ -1,6 +1,7 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
 from core.database.repository import Database
+from core.config import settings
 from web.app import create_web_app
 
 
@@ -180,3 +181,104 @@ async def test_clone_filter(app, db):
         clone_resp = await client.post(f"/api/filters/{filter_id}/clone")
         assert clone_resp.status_code == 200
         assert clone_resp.json()["filter"]["name"] == "Копия — Original"
+
+
+@pytest.mark.asyncio
+async def test_not_found_endpoints_return_404(app, db):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        update_resp = await client.put(
+            "/api/filters/999999",
+            json={
+                "name": "Missing",
+                "keywords": ["Python"],
+                "city": None,
+                "salary_min": None,
+                "salary_max": None,
+                "employment_types": [],
+                "sites": ["hh"],
+                "experience": None,
+                "exclude_keywords": [],
+            },
+        )
+        assert update_resp.status_code == 404
+        assert update_resp.json()["ok"] is False
+
+        clone_resp = await client.post("/api/filters/999999/clone")
+        assert clone_resp.status_code == 404
+        assert clone_resp.json()["ok"] is False
+
+        save_resp = await client.post("/api/vacancies/999999/save")
+        assert save_resp.status_code == 404
+        assert save_resp.json()["ok"] is False
+
+        block_resp = await client.post("/api/vacancies/999999/block")
+        assert block_resp.status_code == 404
+        assert block_resp.json()["ok"] is False
+
+
+@pytest.mark.asyncio
+async def test_login_wrong_password_returns_401(db):
+    original_password = settings.WEB_PASSWORD
+    settings.WEB_PASSWORD = "secret-pass"
+    try:
+        secured_app = create_web_app(db, scheduler=None)
+        transport = ASGITransport(app=secured_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post("/api/auth/login", json={"password": "bad-pass"})
+            assert resp.status_code == 401
+            assert resp.json()["ok"] is False
+    finally:
+        settings.WEB_PASSWORD = original_password
+
+
+@pytest.mark.asyncio
+async def test_web_filter_creation_uses_real_telegram_user(app, db):
+    await db.get_or_create_user(telegram_id=0, username="web_user")
+    real_user = await db.get_or_create_user(telegram_id=123456, username="real")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/api/filters",
+            json={
+                "name": "Shared Filter",
+                "keywords": ["Python"],
+                "city": None,
+                "salary_min": None,
+                "salary_max": None,
+                "employment_types": [],
+                "sites": ["hh"],
+                "experience": None,
+                "exclude_keywords": [],
+            },
+        )
+        assert create_resp.status_code == 200
+        filter_id = create_resp.json()["filter"]["id"]
+
+    vf = await db.get_filter(filter_id)
+    assert vf.user_id == real_user.id
+
+
+@pytest.mark.asyncio
+async def test_web_user_data_is_merged_into_real_user(app, db):
+    web_user = await db.get_or_create_user(telegram_id=0, username="web_user")
+    real_user = await db.get_or_create_user(telegram_id=654321, username="real")
+    old_filter = await db.create_filter(
+        user_id=web_user.id,
+        name="Old Web Filter",
+        keywords=["React"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/saved")
+        assert resp.status_code == 200
+
+    moved = await db.get_filter(old_filter.id)
+    assert moved.user_id == real_user.id

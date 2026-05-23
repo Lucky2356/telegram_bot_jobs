@@ -124,6 +124,18 @@ async def test_blocklist(db):
 
 
 @pytest.mark.asyncio
+async def test_blocklist_respects_pattern_type(db):
+    user = await db.get_or_create_user(telegram_id=1)
+    await db.add_blocklist(user.id, "SpamCo", "company")
+    await db.add_blocklist(user.id, "gambling", "keyword")
+
+    assert await db.is_blocked(user.id, "SpamCo LLC", "Python Developer") is True
+    assert await db.is_blocked(user.id, "GoodCompany", "Gambling platform developer") is True
+    assert await db.is_blocked(user.id, "Gambling LLC", "Python Developer") is False
+    assert await db.is_blocked(user.id, "GoodCompany", "SpamCo integration engineer") is False
+
+
+@pytest.mark.asyncio
 async def test_unsave_vacancy(db):
     user = await db.get_or_create_user(telegram_id=1)
     from scrapers.base import VacancyData
@@ -141,3 +153,64 @@ async def test_remove_blocklist_by_id(db):
     blocks = await db.get_blocklist()
     await db.remove_blocklist_by_id(blocks[0].id)
     assert len(await db.get_blocklist()) == 0
+
+
+@pytest.mark.asyncio
+async def test_saved_and_blocklist_can_be_scoped_to_user(db):
+    from scrapers.base import VacancyData
+
+    user1 = await db.get_or_create_user(telegram_id=1)
+    user2 = await db.get_or_create_user(telegram_id=2)
+    vac1 = await db.add_vacancy(VacancyData(source="hh", source_id="scope1", title="One", url="url1"))
+    vac2 = await db.add_vacancy(VacancyData(source="hh", source_id="scope2", title="Two", url="url2"))
+
+    await db.save_vacancy(user1.id, vac1.id)
+    await db.save_vacancy(user2.id, vac2.id)
+    await db.add_blocklist(user1.id, "CompanyOne", "company")
+    await db.add_blocklist(user2.id, "CompanyTwo", "company")
+
+    saved1 = await db.get_saved_vacancies(user1.id)
+    saved2 = await db.get_saved_vacancies(user2.id)
+    blocks1 = await db.get_blocklist(user1.id)
+    blocks2 = await db.get_blocklist(user2.id)
+
+    assert [v.title for _, v in saved1] == ["One"]
+    assert [v.title for _, v in saved2] == ["Two"]
+    assert [b.pattern for b in blocks1] == ["CompanyOne"]
+    assert [b.pattern for b in blocks2] == ["CompanyTwo"]
+
+
+@pytest.mark.asyncio
+async def test_merge_user_data_moves_filters_saved_and_blocklist(db):
+    from scrapers.base import VacancyData
+
+    web_user = await db.get_or_create_user(telegram_id=0, username="web_user")
+    tg_user = await db.get_or_create_user(telegram_id=777, username="real_user")
+    vf = await db.create_filter(
+        user_id=web_user.id,
+        name="Web Filter",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+    vac = await db.add_vacancy(VacancyData(source="hh", source_id="merge-1", title="Merge", url="url"))
+    await db.save_vacancy(web_user.id, vac.id)
+    await db.add_blocklist(web_user.id, "Bad Co", "company")
+    await db.mark_sent(web_user.id, vac.id, filter_id=vf.id)
+
+    await db.merge_user_data(source_user_id=web_user.id, target_user_id=tg_user.id)
+
+    moved_filter = await db.get_filter(vf.id)
+    saved = await db.get_saved_vacancies(tg_user.id)
+    blocks = await db.get_blocklist(tg_user.id)
+    sent = await db.is_sent(tg_user.id, vac.id)
+
+    assert moved_filter.user_id == tg_user.id
+    assert len(saved) == 1
+    assert saved[0][1].id == vac.id
+    assert len(blocks) == 1
+    assert blocks[0].pattern == "Bad Co"
+    assert sent is True

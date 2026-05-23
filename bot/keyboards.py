@@ -41,13 +41,20 @@ class FilterCallback(CallbackData, prefix="fw"):
 
 _KW_ID: dict[str, str] = {}
 _ID_KW: dict[str, str] = {}
+_GROUP_ID: dict[str, str] = {}
+_ID_GROUP: dict[str, str] = {}
 
 
 def _build_kw_ids():
     _KW_ID.clear()
     _ID_KW.clear()
+    _GROUP_ID.clear()
+    _ID_GROUP.clear()
     idx = 0
-    for group in KEYWORDS_BY_GROUP.values():
+    for group_idx, (group_name, group) in enumerate(KEYWORDS_BY_GROUP.items()):
+        group_id = f"g{group_idx}"
+        _GROUP_ID[group_name] = group_id
+        _ID_GROUP[group_id] = group_name
         for display_name in group:
             sid = f"k{idx}"
             _KW_ID[display_name] = sid
@@ -260,7 +267,7 @@ def build_start_keyboard() -> InlineKeyboardMarkup:
         _btn("➕ Добавить фильтр", WizardAction.MAIN_ADD),
         _btn("📋 Мои фильтры", WizardAction.MAIN_FILTERS),
     )
-    builder.row(_btn("🔍 Проверить сейчас", WizardAction.CHECK_NOW))
+    builder.row(_btn("🔎 Проверить сейчас", WizardAction.CHECK_NOW))
     return builder.as_markup()
 
 
@@ -308,14 +315,14 @@ def build_keyword_groups_keyboard(selected: list[str] | None = None) -> InlineKe
     """First step: show 15 groups, user picks one to see keywords."""
     selected = selected or []
     cnt = len(selected)
-    done_label = f"✅ Готово ({cnt} выбрано)" if cnt else "✅ Пропустить (не выбрано)"
+    done_label = f"✅ Готово ({cnt} выбрано)" if cnt else "✅ Далее"
     builder = InlineKeyboardBuilder()
     for group_name in KEYWORDS_BY_GROUP:
         has_sel = any(s in KEYWORDS_BY_GROUP[group_name] for s in selected)
         label = f"✅ {group_name}" if has_sel else group_name
         builder.row(InlineKeyboardButton(
             text=label,
-            callback_data=FilterCallback(action=WizardAction.KW_GROUP_SELECT, value=group_name).pack(),
+            callback_data=FilterCallback(action=WizardAction.KW_GROUP_SELECT, value=_GROUP_ID[group_name]).pack(),
         ))
     builder.row(_btn(done_label, WizardAction.KEYWORD_DONE, value="__done__"))
     builder.row(_btn("❌ Отмена", WizardAction.CANCEL))
@@ -350,14 +357,14 @@ def build_keywords_for_group_keyboard(group: str, selected: list[str]) -> Inline
 def build_keywords_keyboard(selected: list[str]) -> InlineKeyboardMarkup:
     return _build_keyword_grid(
         selected, WizardAction.KEYWORD_TOGGLE, WizardAction.KEYWORD_DONE,
-        "Далее →",
+        "Р”Р°Р»РµРµ в†’",
     )
 
 
 def build_exclude_keywords_keyboard(selected: list[str]) -> InlineKeyboardMarkup:
     return _build_keyword_grid(
         selected, WizardAction.EXCLUDE_TOGGLE, WizardAction.EXCLUDE_DONE,
-        "Далее →", back_action=WizardAction.KEYWORD_DONE,
+        "Р”Р°Р»РµРµ в†’", back_action=WizardAction.KW_GROUP_BACK,
     )
 
 
@@ -478,7 +485,7 @@ def build_filters_list_keyboard(filters: list) -> InlineKeyboardMarkup:
             _btn("🗑", WizardAction.FILTER_DELETE, str(vf.id)),
         )
     builder.row(_btn("➕ Добавить фильтр", WizardAction.MAIN_ADD))
-    builder.row(_btn("🔍 Проверить сейчас", WizardAction.CHECK_NOW))
+    builder.row(_btn("🔎 Проверить сейчас", WizardAction.CHECK_NOW))
     return builder.as_markup()
 
 
@@ -488,12 +495,12 @@ def build_vacancy_actions_keyboard(
     builder = InlineKeyboardBuilder()
     if url:
         builder.row(
-            InlineKeyboardButton(text="🔗 Открыть", url=url),
+            InlineKeyboardButton(text="🔗 Открыть вакансию", url=url),
         )
     builder.row(
-        _btn("📌 Отложить", WizardAction.VAC_SAVE, str(vacancy_id)),
-        _btn("🚫 Не интересует", WizardAction.VAC_BLOCK, f"{vacancy_id}|{source}"),
-        _btn("🔍 Похожие", WizardAction.VAC_SIMILAR, str(vacancy_id)),
+        _btn("⭐ Сохранить", WizardAction.VAC_SAVE, str(vacancy_id)),
+        _btn("🙈 Скрыть", WizardAction.VAC_BLOCK, f"{vacancy_id}|{source}"),
+        _btn("🧭 Похожие", WizardAction.VAC_SIMILAR, str(vacancy_id)),
     )
     return builder.as_markup()
 
@@ -501,7 +508,7 @@ def build_vacancy_actions_keyboard(
 def build_filter_detail_keyboard(filter_id: int, is_active: bool) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
-        _btn("📋 Клонировать", WizardAction.FILTER_CLONE, str(filter_id)),
+        _btn("📄 Клонировать", WizardAction.FILTER_CLONE, str(filter_id)),
         _btn("⏸" if is_active else "▶️", WizardAction.FILTER_TOGGLE, str(filter_id)),
     )
     builder.row(
@@ -509,3 +516,5 @@ def build_filter_detail_keyboard(filter_id: int, is_active: bool) -> InlineKeybo
         _btn("◀️ Назад", WizardAction.MAIN_FILTERS),
     )
     return builder.as_markup()
+
+

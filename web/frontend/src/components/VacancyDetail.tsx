@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
+import { X, ExternalLink, BookmarkPlus, Ban } from 'lucide-react'
 import type { VacancyResult, AppConfig } from '../types'
 import { api } from '../api'
-import { toast } from './Toast'
-import { X, ExternalLink, Bookmark, Ban } from 'lucide-react'
+import { toast } from './toastBus'
 
 interface VacancyDetailProps {
   vacancy: VacancyResult
@@ -12,8 +12,11 @@ interface VacancyDetailProps {
 }
 
 const sourceLabels: Record<string, string> = {
-  hh: 'hh.ru', superjob: 'SuperJob', trudvsem: 'Работа России',
-  rabota: 'rabota.ru', habr: 'Хабр Карьера',
+  hh: 'hh.ru',
+  superjob: 'SuperJob',
+  trudvsem: 'Работа России',
+  rabota: 'rabota.ru',
+  habr: 'Хабр Карьера',
 }
 
 export default function VacancyDetail({ vacancy, config, onClose, onSaved }: VacancyDetailProps) {
@@ -21,7 +24,9 @@ export default function VacancyDetail({ vacancy, config, onClose, onSaved }: Vac
   const [blocking, setBlocking] = useState(false)
 
   useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
   }, [onClose])
@@ -31,10 +36,10 @@ export default function VacancyDetail({ vacancy, config, onClose, onSaved }: Vac
     setSaving(true)
     try {
       await api.saveVacancy(vacancy.id)
-      toast.success('✅ Сохранено')
+      toast.success('Вакансия сохранена')
       onSaved?.()
     } catch {
-      toast.error('Ошибка')
+      toast.error('Не удалось сохранить вакансию')
     } finally {
       setSaving(false)
     }
@@ -45,150 +50,108 @@ export default function VacancyDetail({ vacancy, config, onClose, onSaved }: Vac
     setBlocking(true)
     try {
       await api.blockVacancy(vacancy.id)
-      toast.success('🚫 Компания в блок-листе')
+      toast.success('Компания добавлена в блок-лист')
     } catch {
-      toast.error('Ошибка')
+      toast.error('Не удалось обновить блок-лист')
     } finally {
       setBlocking(false)
     }
   }
 
-  const empLabel = vacancy.employment_type
-    ? config.employment_types[vacancy.employment_type] || vacancy.employment_type
-    : null
-
-  const timeAgo = vacancy.published_at
-    ? (() => {
-        const diff = Date.now() - new Date(vacancy.published_at).getTime()
-        const hours = Math.floor(diff / 3600000)
-        if (hours < 1) return 'только что'
-        if (hours < 24) return `${hours} ч. назад`
-        const days = Math.floor(hours / 24)
-        if (days === 1) return 'вчера'
-        if (days < 7) return `${days} дн. назад`
-        return new Date(vacancy.published_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
-      })()
-    : null
-
   return (
-    <div
-      className="fixed inset-0 z-40 flex justify-end"
-      role="dialog"
-      aria-modal="true"
-      aria-label={vacancy.title}
-    >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-slate-950/30" onClick={onClose} />
-
-      {/* Drawer */}
-      <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-800 h-full overflow-y-auto flex flex-col">
-        {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-slate-900 z-10 flex items-start justify-between px-6 pt-5 pb-3 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100 leading-snug pr-4">
-            {vacancy.title}
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
-            aria-label="Закрыть"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 px-6 py-4 space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-              {sourceLabels[vacancy.source] || vacancy.source}
-            </span>
-            {vacancy.filter_name && (
-              <span className="px-2.5 py-1 text-[10px] font-medium rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                {vacancy.filter_name}
-              </span>
-            )}
-            {timeAgo && (
-              <span className="text-[10px] text-slate-400">🕐 {timeAgo}</span>
-            )}
-          </div>
-
-          <div className="flex flex-wrap gap-4 text-sm text-slate-600 dark:text-slate-400">
-            {vacancy.company && (
-              <span className="flex items-center gap-1.5">
-                <span className="font-medium text-slate-800 dark:text-slate-200">{vacancy.company}</span>
-              </span>
-            )}
-            {vacancy.city && (
-              <span className="flex items-center gap-1.5">📍 {vacancy.city}</span>
-            )}
-          </div>
-
-          {vacancy.salary_text && (
-            <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2 rounded-lg inline-block">
-              {vacancy.salary_text}
+    <div className="fixed inset-0 z-50 flex items-end justify-end bg-slate-950/50 md:items-stretch" role="dialog" aria-modal="true" aria-label={vacancy.title}>
+      <div className="h-full w-full max-w-2xl animate-soft-scale border-l border-[var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--shadow-lg)]">
+        <div className="flex h-full flex-col">
+          <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[var(--border)] bg-[color:var(--surface)]/92 px-4 py-4 backdrop-blur md:px-6">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted">{sourceLabels[vacancy.source] || vacancy.source}</p>
+              <h2 className="mt-1 text-base font-semibold leading-tight text-primary md:text-lg">{vacancy.title}</h2>
             </div>
-          )}
+            <button
+              onClick={onClose}
+              className="focus-ring inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-elevated)] text-secondary transition hover:text-primary"
+              aria-label="Закрыть"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </header>
 
-          {(empLabel || vacancy.experience) && (
-            <div className="flex flex-wrap gap-2">
-              {empLabel && (
-                <span className="px-3 py-1.5 text-xs rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium">
-                  👔 {empLabel}
-                </span>
+          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
+            <div className="rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-4">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-secondary">
+                {vacancy.company && <span className="font-semibold text-primary">{vacancy.company}</span>}
+                {vacancy.city && <span>{vacancy.city}</span>}
+                {vacancy.published_at && (
+                  <span>{new Date(vacancy.published_at).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                )}
+              </div>
+
+              {vacancy.salary_text && (
+                <p className="mt-3 text-xl font-bold text-emerald-400">{vacancy.salary_text}</p>
               )}
-              {vacancy.experience && (
-                <span className="px-3 py-1.5 text-xs rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium">
-                  💼 {config.experiences[vacancy.experience] || vacancy.experience}
-                </span>
-              )}
+
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-secondary">
+                {vacancy.employment_type && (
+                  <span className="rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] px-2.5 py-1">
+                    {config.employment_types[vacancy.employment_type] || vacancy.employment_type}
+                  </span>
+                )}
+                {vacancy.experience && (
+                  <span className="rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] px-2.5 py-1">
+                    {config.experiences[vacancy.experience] || vacancy.experience}
+                  </span>
+                )}
+                {vacancy.filter_name && (
+                  <span className="rounded-lg border border-[var(--border)] bg-[var(--accent-soft)] px-2.5 py-1 text-primary">
+                    {vacancy.filter_name}
+                  </span>
+                )}
+              </div>
             </div>
-          )}
 
-          {vacancy.description && (
-            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-              <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Описание</h3>
-              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">
-                {vacancy.description}
+            <section className="rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Описание</h3>
+              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-secondary">
+                {vacancy.description || 'Описание не предоставлено источником.'}
               </p>
-            </div>
-          )}
+            </section>
+          </div>
 
-          {vacancy.published_at && (
-            <p className="text-xs text-slate-400">
-              Опубликовано: {new Date(vacancy.published_at).toLocaleString('ru-RU', {
-                day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
-              })}
-            </p>
-          )}
-        </div>
-
-        <div className="sticky bottom-0 bg-white dark:bg-slate-900 flex items-center justify-end gap-2 px-4 md:px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex-wrap">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors cursor-pointer disabled:opacity-50"
-          >
-            <Bookmark className="w-3.5 h-3.5" />
-            {saving ? '⏳' : 'Сохранить'}
-          </button>
-          <button
-            onClick={handleBlock}
-            disabled={blocking}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-500 hover:text-red-500 transition-colors cursor-pointer disabled:opacity-50"
-          >
-            <Ban className="w-3.5 h-3.5" />
-            {blocking ? '⏳' : 'Заблокировать'}
-          </button>
-          <a
-            href={vacancy.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            Открыть
-          </a>
+          <footer className="sticky bottom-0 grid grid-cols-1 gap-2 border-t border-[var(--border)] bg-[color:var(--surface)]/95 px-4 py-3 backdrop-blur sm:grid-cols-3 md:px-6">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="focus-ring inline-flex h-10 items-center justify-center gap-1 rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] text-sm font-semibold text-primary transition hover:border-[var(--border-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <BookmarkPlus className="h-4 w-4" />
+              {saving ? 'Сохраняем...' : 'Сохранить'}
+            </button>
+            <button
+              onClick={handleBlock}
+              disabled={blocking}
+              className="focus-ring inline-flex h-10 items-center justify-center gap-1 rounded-xl border border-rose-400/30 bg-rose-500/10 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Ban className="h-4 w-4" />
+              {blocking ? 'Обновляем...' : 'Скрыть'}
+            </button>
+            <a
+              href={vacancy.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="focus-ring inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-[var(--accent)] text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)]"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Открыть источник
+            </a>
+          </footer>
         </div>
       </div>
+
+      <button
+        className="sr-only"
+        aria-label="Закрыть карточку вакансии"
+        onClick={onClose}
+      />
     </div>
   )
 }

@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { Copy, Pencil, Play, Power, Trash2, Search } from 'lucide-react'
 import type { VacancyFilter, AppConfig } from '../types'
 import { api } from '../api'
-import { toast } from './Toast'
+import { toast } from './toastBus'
 import FilterModal from './FilterModal'
 import ConfirmModal from './ConfirmModal'
 
@@ -20,140 +21,161 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
 
   const filtered = useMemo(
-    () => search ? filters.filter((f) => f.name.toLowerCase().includes(search.toLowerCase())) : filters,
+    () => (search ? filters.filter((f) => f.name.toLowerCase().includes(search.toLowerCase())) : filters),
     [filters, search],
   )
 
   const handleToggle = async (id: number) => {
     try {
       const res = await api.toggleFilter(id)
-      toast.success(res.active ? 'Фильтр включён' : 'Фильтр на паузе')
+      toast.success(res.active ? 'Фильтр включён' : 'Фильтр поставлен на паузу')
       onRefresh()
-    } catch { toast.error('Ошибка') }
+    } catch {
+      toast.error('Не удалось обновить статус фильтра')
+    }
   }
 
   const handleCheckOne = async (id: number) => {
     setCheckingId(id)
     try {
       await api.checkFilter(id)
-      toast.success('Проверка запущена!')
-      setTimeout(() => onRefresh(), 2000)
-    } catch { toast.error('Ошибка') }
-    finally { setCheckingId(null) }
+      toast.success('Проверка фильтра запущена')
+      setTimeout(() => onRefresh(), 1500)
+    } catch {
+      toast.error('Ошибка запуска проверки')
+    } finally {
+      setCheckingId(null)
+    }
   }
 
   const handleClone = async (id: number) => {
     try {
       await api.cloneFilter(id)
-      toast.success('Фильтр склонирован')
+      toast.success('Фильтр успешно клонирован')
       onRefresh()
     } catch {
-      toast.error('Ошибка клонирования')
+      toast.error('Не удалось клонировать фильтр')
     }
   }
 
   if (filters.length === 0) {
     return (
-      <div className="text-center py-8 text-slate-400 dark:text-slate-500">
-        <p className="text-sm">Фильтров пока нет</p>
+      <div className="rounded-xl border border-dashed border-[var(--border)] bg-[color:var(--surface-elevated)] p-6 text-center">
+        <p className="text-sm font-medium text-primary">Фильтров ещё нет</p>
+        <p className="mt-1 text-xs text-secondary">Создайте первый фильтр и запустите проверку вакансий.</p>
       </div>
     )
   }
 
   return (
     <>
-      {(filters.length > 5 || true) && (
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="🔍 Поиск фильтров..."
-          className="w-full mb-2 h-9 px-3 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-          aria-label="Поиск фильтров"
-        />
-      )}
-      <div className="flex flex-wrap gap-2">
+      <div className="space-y-3">
+        {filters.length > 4 && (
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Поиск фильтра"
+              className="focus-ring h-10 w-full rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] pl-9 pr-3 text-sm text-primary placeholder:text-muted"
+              aria-label="Поиск фильтров"
+            />
+          </div>
+        )}
+
         <button
           onClick={() => onSelect(null)}
-          className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
+          className={`focus-ring inline-flex h-10 items-center rounded-xl border px-3 text-sm font-medium transition ${
             selectedId === null
-              ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-950 dark:border-white shadow-sm'
-              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-400'
+              ? 'border-[var(--border-strong)] bg-[var(--accent-soft)] text-primary'
+              : 'border-[var(--border)] bg-[color:var(--surface-elevated)] text-secondary hover:text-primary'
           }`}
         >
-          Все
+          Все фильтры
         </button>
-        {filtered.map((f) => (
-          <div
-            key={f.id}
-            className={`group relative flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
-              selectedId === f.id
-                ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-950 dark:border-white shadow-sm'
-                : f.active
-                  ? 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400'
-                  : 'bg-slate-50 dark:bg-slate-800/30 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700'
-            }`}
-            onClick={() => onSelect(f.id)}
-            role="tab"
-            aria-selected={selectedId === f.id}
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(f.id) }}}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${f.active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
-            <span className={`${!f.active ? 'line-through' : ''} max-w-[120px] truncate`}>{f.name}</span>
 
-            <div className="flex md:group-hover:flex items-center gap-0.5 ml-1 shrink-0">
-              {f.active && (
+        <div className="space-y-2">
+          {filtered.map((f) => (
+            <div
+              key={f.id}
+              className={`rounded-xl border p-3 transition ${
+                selectedId === f.id
+                  ? 'border-[var(--border-strong)] bg-[var(--accent-soft)]'
+                  : 'border-[var(--border)] bg-[color:var(--surface-elevated)]'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleCheckOne(f.id) }}
-                  disabled={checkingId === f.id}
-                  className="w-7 h-7 flex items-center justify-center text-xs rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-emerald-500 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
-                  aria-label={`Проверить фильтр ${f.name}`}
+                  onClick={() => onSelect(f.id)}
+                  className="focus-ring flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left"
                 >
-                  {checkingId === f.id ? '⏳' : '▶'}
+                  <span className={`h-2 w-2 rounded-full ${f.active ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+                  <span className={`truncate text-sm font-medium ${f.active ? 'text-primary' : 'text-secondary line-through'}`}>
+                    {f.name}
+                  </span>
                 </button>
-              )}
-              <button
-                onClick={(e) => { e.stopPropagation(); handleToggle(f.id) }}
-                className="w-7 h-7 flex items-center justify-center text-xs rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-blue-600 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
-                aria-label={f.active ? 'Выключить' : 'Включить'}
-              >
-                {f.active ? '⏸' : '▶️'}
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleClone(f.id) }}
-                className="w-7 h-7 flex items-center justify-center text-xs rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-blue-600 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
-                aria-label="Клонировать"
-              >
-                📋
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); setEditFilter(f) }}
-                className="w-7 h-7 flex items-center justify-center text-xs rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-blue-600 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
-                aria-label="Редактировать"
-              >
-                ✏️
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); setDeleteConfirm(f.id) }}
-                className="w-7 h-7 flex items-center justify-center text-xs rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-red-500 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
-                aria-label="Удалить"
-              >
-                🗑
-              </button>
+
+                <div className="inline-flex items-center gap-1">
+                  {f.active && (
+                    <button
+                      onClick={() => handleCheckOne(f.id)}
+                      disabled={checkingId === f.id}
+                      className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] text-secondary transition hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label={`Проверить фильтр ${f.name}`}
+                    >
+                      <Play className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleToggle(f.id)}
+                    className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] text-secondary transition hover:text-primary"
+                    aria-label={f.active ? 'Выключить фильтр' : 'Включить фильтр'}
+                  >
+                    <Power className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleClone(f.id)}
+                    className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] text-secondary transition hover:text-primary"
+                    aria-label="Клонировать фильтр"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setEditFilter(f)}
+                    className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] text-secondary transition hover:text-primary"
+                    aria-label="Редактировать фильтр"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirm(f.id)}
+                    className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-400/30 bg-rose-500/10 text-rose-300 transition hover:bg-rose-500/20"
+                    aria-label="Удалить фильтр"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {editFilter && (
-        <FilterModal config={config} filter={editFilter} onClose={() => setEditFilter(null)} onSaved={onRefresh} />
+        <FilterModal
+          key={`edit-${editFilter.id}`}
+          config={config}
+          filter={editFilter}
+          onClose={() => setEditFilter(null)}
+          onSaved={onRefresh}
+        />
       )}
 
       <ConfirmModal
         open={deleteConfirm !== null}
         title="Удалить фильтр?"
-        message="Это действие нельзя отменить."
+        message="Это действие нельзя отменить. История отправок по вакансиям останется в системе."
         confirmLabel="Удалить"
         danger
         onConfirm={async () => {
@@ -163,7 +185,9 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
               toast.success('Фильтр удалён')
               if (selectedId === deleteConfirm) onSelect(null)
               onRefresh()
-            } catch { toast.error('Ошибка удаления') }
+            } catch {
+              toast.error('Ошибка удаления фильтра')
+            }
           }
           setDeleteConfirm(null)
         }}

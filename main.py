@@ -4,6 +4,7 @@ import os
 import logging
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from core.config import settings
@@ -47,8 +48,11 @@ async def main():
 
     bot = Bot(
         token=settings.BOT_TOKEN,
+        session=AiohttpSession(proxy=settings.TELEGRAM_PROXY or None),
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
+    if settings.TELEGRAM_PROXY:
+        logger.info("Telegram proxy is configured")
     scheduler_obj = Scheduler(db, bot)
     dp = setup_dispatcher(db, scheduler_obj)
 

@@ -18,91 +18,127 @@ interface StatsPanelProps {
   stats: Stats
 }
 
-const chartOptions = {
-  responsive: true,
-  plugins: {
-    legend: {
-      position: 'bottom' as const,
-      labels: { color: '#94a3b8' },
-    },
-  },
+function cssVar(name: string, fallback: string) {
+  if (typeof window === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
 }
 
 export default function StatsPanel({ stats }: StatsPanelProps) {
-  const siteData = useMemo(() => ({
+  const colors = useMemo(() => ({
+    accent: cssVar('--accent', '#5c73ff'),
+    textSecondary: cssVar('--text-secondary', '#8c9bb5'),
+    border: cssVar('--border', 'rgba(127, 146, 191, 0.22)'),
+    pie: ['#5c73ff', '#4bb8d8', '#31c48d', '#f0b457', '#ef6f89'],
+  }), [])
+
+  const chartOptions = useMemo(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+        labels: {
+          color: colors.textSecondary,
+          usePointStyle: true,
+          boxWidth: 8,
+        },
+      },
+      tooltip: {
+        backgroundColor: 'rgba(12, 18, 32, 0.9)',
+        borderColor: colors.border,
+        borderWidth: 1,
+        titleColor: '#fff',
+        bodyColor: '#d6e0f5',
+      },
+    },
+    scales: {
+      y: {
+        ticks: { color: colors.textSecondary },
+        grid: { color: colors.border },
+      },
+      x: {
+        ticks: { color: colors.textSecondary },
+        grid: { color: 'transparent' },
+      },
+    },
+  }), [colors])
+
+  const sourceData = useMemo(() => ({
     labels: Object.keys(stats.sent_by_source).map(
-      (k) => ({ hh: 'hh.ru', superjob: 'SuperJob', trudvsem: 'Работа России', rabota: 'rabota.ru', habr: 'Хабр Карьера' }[k] || k),
+      (key) => ({ hh: 'hh.ru', superjob: 'SuperJob', trudvsem: 'Работа России', rabota: 'rabota.ru', habr: 'Хабр Карьера' }[key] || key),
     ),
     datasets: [
       {
         label: 'Вакансий',
         data: Object.values(stats.sent_by_source),
-        backgroundColor: ['#2563eb', '#06b6d4', '#10b981', '#d97706', '#e11d48'],
+        backgroundColor: colors.pie,
+        borderColor: 'transparent',
       },
     ],
-  }), [stats.sent_by_source])
+  }), [stats.sent_by_source, colors.pie])
 
   const dayData = useMemo(() => ({
     labels: stats.sent_by_day.map((d) => {
-      const date = new Date(d.date + 'T00:00:00')
+      const date = new Date(`${d.date}T00:00:00`)
       return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
     }),
     datasets: [
       {
         label: 'Вакансий в день',
         data: stats.sent_by_day.map((d) => d.count),
-        backgroundColor: '#2563eb',
-        borderRadius: 4,
+        backgroundColor: colors.accent,
+        borderRadius: 8,
       },
     ],
-  }), [stats.sent_by_day])
+  }), [stats.sent_by_day, colors.accent])
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <StatCard label="Всего фильтров" value={stats.total_filters} />
-        <StatCard label="Активных" value={stats.active_filters} />
-        <StatCard label="В базе" value={stats.total_vacancies} />
-        <StatCard label="За 7 дней" value={stats.sent_last_7d} />
-        <StatCard label="За 30 дней" value={stats.sent_last_30d} />
-      </div>
+    <div className="space-y-4">
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <Metric title="Всего фильтров" value={stats.total_filters} />
+        <Metric title="Активные" value={stats.active_filters} />
+        <Metric title="В базе" value={stats.total_vacancies} />
+        <Metric title="За 7 дней" value={stats.sent_last_7d} />
+        <Metric title="За 30 дней" value={stats.sent_last_30d} />
+      </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-800">
-          <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wider">
-            По дням
-          </h3>
-          {stats.sent_by_day.length > 0 ? (
-            <Bar data={dayData} options={chartOptions} />
-          ) : (
-            <p className="text-center text-slate-400 py-8">Нет данных за последние 30 дней</p>
-          )}
-        </div>
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-800">
-          <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wider">
-            По сайтам
-          </h3>
-          {Object.keys(stats.sent_by_source).length > 0 ? (
-            <Pie data={siteData} options={chartOptions} />
-          ) : (
-            <p className="text-center text-slate-400 py-8">Нет данных</p>
-          )}
-        </div>
-      </div>
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <article className="bento-card p-4 xl:col-span-8">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Поток вакансий по дням</h3>
+          <div className="mt-3 h-[320px]">
+            {stats.sent_by_day.length > 0 ? (
+              <Bar data={dayData} options={chartOptions} />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-secondary">Нет данных за последние дни</div>
+            )}
+          </div>
+        </article>
 
-      <div className="text-center py-6">
-        <p className="text-4xl font-bold text-blue-600 dark:text-blue-400">{stats.total_sent}</p>
-        <p className="text-sm text-slate-400 mt-1">Всего отправлено вакансий</p>
-      </div>
+        <article className="bento-card p-4 xl:col-span-4">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Распределение по источникам</h3>
+          <div className="mt-3 h-[320px]">
+            {Object.keys(stats.sent_by_source).length > 0 ? (
+              <Pie data={sourceData} options={{ ...chartOptions, scales: undefined }} />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-secondary">Нет данных по источникам</div>
+            )}
+          </div>
+        </article>
+      </section>
+
+      <section className="bento-card p-6 text-center">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Всего отправлено в Telegram</p>
+        <p className="mt-2 code text-4xl font-bold text-primary md:text-5xl">{stats.total_sent}</p>
+      </section>
     </div>
   )
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function Metric({ title, value }: { title: string; value: number }) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl p-4 text-center shadow-sm border border-slate-200 dark:border-slate-800">
-      <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{value}</p>
-      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{label}</p>
-    </div>
+    <article className="bento-card p-4">
+      <p className="code text-2xl font-bold tracking-tight text-primary">{value}</p>
+      <p className="mt-1 text-xs text-secondary">{title}</p>
+    </article>
   )
 }

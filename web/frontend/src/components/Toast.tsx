@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from 'react'
-import { X, CheckCircle, AlertCircle, Info } from 'lucide-react'
+import { useState, useCallback, useEffect, type ReactNode } from 'react'
+import { X, CheckCircle2, AlertCircle, Info } from 'lucide-react'
+import { setToastHandler } from './toastBus'
 
 interface ToastData {
   message: string
@@ -8,18 +9,11 @@ interface ToastData {
 }
 
 let toastId = 0
-let addToastFn: ((data: Omit<ToastData, 'id'>) => void) | null = null
 
-export const toast = {
-  success: (message: string) => addToastFn?.({ message, type: 'success' }),
-  error: (message: string) => addToastFn?.({ message, type: 'error' }),
-  info: (message: string) => addToastFn?.({ message, type: 'info' }),
-}
-
-const iconMap: Record<string, React.ReactNode> = {
-  success: <CheckCircle className="w-4 h-4 text-emerald-500" />,
-  error: <AlertCircle className="w-4 h-4 text-red-500" />,
-  info: <Info className="w-4 h-4 text-blue-500" />,
+const iconMap: Record<string, ReactNode> = {
+  success: <CheckCircle2 className="h-4 w-4 text-emerald-400" />,
+  error: <AlertCircle className="h-4 w-4 text-rose-400" />,
+  info: <Info className="h-4 w-4 text-[var(--accent)]" />,
 }
 
 export default function Toast() {
@@ -32,35 +26,38 @@ export default function Toast() {
   const addToast = useCallback((data: Omit<ToastData, 'id'>) => {
     const id = ++toastId
     setItems((prev) => [...prev, { ...data, id }])
-    setTimeout(() => removeToast(id), 3500)
+    setTimeout(() => removeToast(id), 3600)
   }, [removeToast])
 
   useEffect(() => {
-    addToastFn = addToast
-    return () => { addToastFn = null }
+    setToastHandler(addToast)
+    return () => {
+      setToastHandler(null)
+    }
   }, [addToast])
 
   if (items.length === 0) return null
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2" role="log" aria-label="Notifications">
+    <div className="fixed bottom-22 right-3 z-50 flex max-w-[calc(100vw-24px)] flex-col gap-2 md:bottom-4 md:right-4" role="log" aria-label="Notifications">
       {items.map((item) => (
         <div
           key={item.id}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-lg rounded-xl px-4 py-3 text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2.5 min-w-[280px] max-w-[calc(100vw-32px)]"
+          className="animate-fade-in-up flex min-w-[280px] max-w-[420px] items-center gap-2.5 rounded-xl border border-[var(--border)] bg-[color:var(--surface-strong)] px-3.5 py-3 text-sm text-secondary shadow-[var(--shadow-md)]"
           role="alert"
         >
           {iconMap[item.type]}
-          <span className="flex-1">{item.message}</span>
+          <span className="flex-1 text-primary">{item.message}</span>
           <button
             onClick={() => removeToast(item.id)}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
-            aria-label="Закрыть"
+            className="focus-ring rounded-md p-1 text-muted transition hover:bg-[color:var(--surface-elevated)] hover:text-primary"
+            aria-label="Закрыть уведомление"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       ))}
     </div>
   )
 }
+

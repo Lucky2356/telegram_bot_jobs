@@ -26,13 +26,14 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
   render() {
     if (this.state.hasError) {
       return this.props.fallback || (
-        <div className="text-center py-16 text-slate-400">
-          <p className="text-base mb-2">⚠️ Что-то пошло не так</p>
+        <div className="bento-card p-8 text-center">
+          <p className="text-lg font-semibold text-primary">Что-то пошло не так</p>
+          <p className="mt-2 text-sm text-secondary">Интерфейс перезагрузится после повторной попытки.</p>
           <button
             onClick={this.handleRetry}
-            className="px-4 py-2 text-sm font-medium text-primary border border-primary/30 rounded-xl hover:bg-primary hover:text-white transition-all cursor-pointer"
+            className="focus-ring mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)]"
           >
-            🔄 Попробовать снова
+            Повторить
           </button>
         </div>
       )

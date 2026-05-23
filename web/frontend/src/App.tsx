@@ -1,5 +1,23 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
-import type { VacancyFilter, Stats, AppConfig, VacancyResult, SavedVacancy, BlocklistItem, ParserStatus } from './types'
+import { useState, useEffect, useCallback, lazy, Suspense, useMemo } from 'react'
+import {
+  MoonStar,
+  Sun,
+  MonitorCog,
+  Plus,
+  SearchCheck,
+  Filter,
+  BellRing,
+  LayoutGrid,
+} from 'lucide-react'
+import type {
+  VacancyFilter,
+  Stats,
+  AppConfig,
+  VacancyResult,
+  SavedVacancy,
+  BlocklistItem,
+  ParserStatus,
+} from './types'
 import { api } from './api'
 import Tabs from './components/Tabs'
 import FiltersPanel from './components/FiltersPanel'
@@ -11,31 +29,40 @@ import BlocklistPanel from './components/BlocklistPanel'
 import StatusBar from './components/StatusBar'
 import FilterModal from './components/FilterModal'
 import ErrorBoundary from './components/ErrorBoundary'
-import Toast, { toast } from './components/Toast'
+import Toast from './components/Toast'
+import { toast } from './components/toastBus'
 import LoginPage from './components/LoginPage'
 
+type ThemeMode = 'light' | 'dark' | 'system'
+
+interface TelegramWebAppLike {
+  ready?: () => void
+  expand?: () => void
+  themeParams?: Record<string, string | undefined>
+  onEvent?: (eventName: string, callback: () => void) => void
+}
+
 const TABS = [
-  { key: 'search', label: 'Поиск' },
-  { key: 'history', label: 'История' },
-  { key: 'saved', label: 'Избранное' },
-  { key: 'stats', label: 'Статистика' },
+  { key: 'search', label: 'Поиск', shortLabel: 'Поиск', icon: 'search' },
+  { key: 'history', label: 'История', shortLabel: 'История', icon: 'history' },
+  { key: 'saved', label: 'Избранное', shortLabel: 'Сейвы', icon: 'saved' },
+  { key: 'stats', label: 'Аналитика', shortLabel: 'Метрики', icon: 'stats' },
 ]
 
 const loadingSpinner = (
-  <div className="text-center py-20 text-slate-400">
-    <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent" />
-    <p className="mt-3 text-sm">Загрузка...</p>
+  <div className="bento-card p-8 text-center text-secondary">
+    <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[var(--accent)] border-r-transparent" />
+    <p className="text-sm">Загружаем данные...</p>
   </div>
 )
 
 function AuthGate({ onLogin }: { onLogin: (token: string) => void }) {
   const [authState, setAuthState] = useState<'loading' | 'login' | 'done'>(() =>
-    sessionStorage.getItem('auth_token') ? 'done' : 'loading'
+    sessionStorage.getItem('auth_token') ? 'done' : 'loading',
   )
 
   useEffect(() => {
     if (authState !== 'loading') return
-    // Auto-login for backward compat (без WEB_PASSWORD)
     fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -47,9 +74,9 @@ function AuthGate({ onLogin }: { onLogin: (token: string) => void }) {
           sessionStorage.setItem('auth_token', data.token)
           onLogin(data.token)
           setAuthState('done')
-        } else {
-          setAuthState('login')
+          return
         }
+        setAuthState('login')
       })
       .catch(() => setAuthState('login'))
   }, [authState, onLogin])
@@ -57,6 +84,33 @@ function AuthGate({ onLogin }: { onLogin: (token: string) => void }) {
   if (authState === 'loading') return loadingSpinner
   if (authState === 'login') return <LoginPage onLogin={(t) => { onLogin(t); setAuthState('done') }} />
   return null
+}
+
+function resolveSystemDark() {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+function applyTheme(mode: ThemeMode) {
+  const html = document.documentElement
+  const dark = mode === 'dark' || (mode === 'system' && resolveSystemDark())
+  html.classList.toggle('dark', dark)
+  html.dataset.theme = dark ? 'dark' : 'light'
+}
+
+function applyTelegramThemeParams(themeParams: Record<string, string | undefined>) {
+  const html = document.documentElement
+  const map: Record<string, string | undefined> = {
+    '--bg': themeParams.bg_color,
+    '--surface-strong': themeParams.secondary_bg_color,
+    '--text-primary': themeParams.text_color,
+    '--text-muted': themeParams.hint_color,
+    '--accent': themeParams.button_color,
+  }
+
+  for (const [cssVar, value] of Object.entries(map)) {
+    if (!value) continue
+    html.style.setProperty(cssVar, value)
+  }
 }
 
 export default function App() {
@@ -92,20 +146,51 @@ function AuthenticatedApp() {
   const [activeTab, setActiveTab] = useState('search')
   const [selectedFilterId, setSelectedFilterId] = useState<number | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
-  const [dark, setDark] = useState(() => {
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
-      const saved = localStorage.getItem('theme')
-      if (saved) return saved === 'dark'
-    } catch { /* ignore */ }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
+      const stored = localStorage.getItem('theme_mode')
+      if (stored === 'dark' || stored === 'light' || stored === 'system') return stored
+    } catch {
+      // ignore
+    }
+    return 'system'
   })
   const [checkingNow, setCheckingNow] = useState(false)
   const [currentFilter, setCurrentFilter] = useState<string | null>(null)
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark)
-    try { localStorage.setItem('theme', dark ? 'dark' : 'light') } catch { /* ignore */ }
-  }, [dark])
+    applyTheme(themeMode)
+    try {
+      localStorage.setItem('theme_mode', themeMode)
+    } catch {
+      // ignore
+    }
+
+    if (themeMode !== 'system') return
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = () => applyTheme('system')
+    media.addEventListener('change', handler)
+    return () => media.removeEventListener('change', handler)
+  }, [themeMode])
+
+  useEffect(() => {
+    const tg = (window as { Telegram?: { WebApp?: TelegramWebAppLike } }).Telegram?.WebApp
+    if (!tg) return
+
+    try {
+      tg.ready?.()
+      tg.expand?.()
+      if (tg.themeParams) applyTelegramThemeParams(tg.themeParams)
+      if (typeof tg.onEvent === 'function') {
+        tg.onEvent('themeChanged', () => {
+          if (tg.themeParams) applyTelegramThemeParams(tg.themeParams)
+        })
+      }
+    } catch {
+      // ignore telegram sdk errors
+    }
+  }, [])
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -118,15 +203,27 @@ function AuthenticatedApp() {
   }, [])
 
   const fetchStatus = useCallback(async () => {
-    try { setStatus(await api.getStatus()) } catch { /* ignore */ }
+    try {
+      setStatus(await api.getStatus())
+    } catch {
+      // ignore
+    }
   }, [])
 
   const fetchFilters = useCallback(async () => {
-    try { setFilters(await api.getFilters()) } catch { toast.error('Ошибка загрузки фильтров') }
+    try {
+      setFilters(await api.getFilters())
+    } catch {
+      toast.error('Ошибка загрузки фильтров')
+    }
   }, [])
 
   const fetchStats = useCallback(async () => {
-    try { setStats(await api.getStats()) } catch { toast.error('Ошибка загрузки статистики') }
+    try {
+      setStats(await api.getStats())
+    } catch {
+      toast.error('Ошибка загрузки статистики')
+    }
   }, [])
 
   const fetchResults = useCallback(async () => {
@@ -135,26 +232,50 @@ function AuthenticatedApp() {
       setResults(data.items)
       setCheckedAt(data.checked_at)
       setChecking(data.checking)
-    } catch { /* ignore */ }
+    } catch {
+      // ignore
+    }
   }, [])
 
   const fetchSaved = useCallback(async () => {
-    try { setSaved(await api.getSaved()) } catch { /* ignore */ }
+    try {
+      setSaved(await api.getSaved())
+    } catch {
+      // ignore
+    }
   }, [])
 
   const fetchBlocklist = useCallback(async () => {
-    try { setBlocklist(await api.getBlocklist()) } catch { /* ignore */ }
+    try {
+      setBlocklist(await api.getBlocklist())
+    } catch {
+      // ignore
+    }
   }, [])
 
-  useEffect(() => { fetchConfig(); fetchStatus() }, [fetchConfig, fetchStatus])
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void fetchConfig()
+      void fetchStatus()
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [fetchConfig, fetchStatus])
 
   useEffect(() => {
-    if (activeTab === 'search') { fetchFilters(); fetchResults() }
-    else if (activeTab === 'saved') { fetchSaved(); fetchBlocklist() }
-    else if (activeTab === 'stats') fetchStats()
+    const timer = setTimeout(() => {
+      if (activeTab === 'search') {
+        void fetchFilters()
+        void fetchResults()
+      } else if (activeTab === 'saved') {
+        void fetchSaved()
+        void fetchBlocklist()
+      } else if (activeTab === 'stats') {
+        void fetchStats()
+      }
+    }, 0)
+    return () => clearTimeout(timer)
   }, [activeTab, fetchFilters, fetchResults, fetchSaved, fetchBlocklist, fetchStats])
 
-  // SSE для real-time обновлений
   useEffect(() => {
     const es = new EventSource('/api/events')
     es.onmessage = (e) => {
@@ -168,181 +289,300 @@ function AuthenticatedApp() {
           case 'filter_started':
             setCurrentFilter(event.filter_name)
             break
-          case 'filter_done':
-            break
           case 'sending_started':
             setCurrentFilter(null)
             break
           case 'check_complete':
             setChecking(false)
             setCurrentFilter(null)
-            fetchResults()
+            void fetchResults()
+            break
+          default:
             break
         }
-      } catch { /* ignore */ }
+      } catch {
+        // ignore
+      }
     }
     return () => es.close()
   }, [fetchResults])
 
-  const toggleTheme = () => setDark((prev) => !prev)
+  const cycleTheme = () => {
+    setThemeMode((prev) => {
+      if (prev === 'system') return 'light'
+      if (prev === 'light') return 'dark'
+      return 'system'
+    })
+  }
+
+  const themeMeta = {
+    system: { icon: <MonitorCog className="h-4 w-4" />, label: 'Система' },
+    light: { icon: <Sun className="h-4 w-4" />, label: 'Светлая' },
+    dark: { icon: <MoonStar className="h-4 w-4" />, label: 'Тёмная' },
+  }[themeMode]
 
   const handleCheckNow = async () => {
     setCheckingNow(true)
     try {
       await api.checkNow()
-      toast.success('Проверка запущена!')
+      toast.success('Проверка запущена')
       setChecking(true)
-    } catch { toast.error('Ошибка') }
-    finally { setCheckingNow(false) }
+    } catch {
+      toast.error('Ошибка запуска проверки')
+    } finally {
+      setCheckingNow(false)
+    }
   }
 
   const handleRefresh = useCallback(() => {
-    fetchFilters(); fetchResults(); fetchStats(); fetchSaved(); fetchBlocklist()
+    void fetchFilters()
+    void fetchResults()
+    void fetchStats()
+    void fetchSaved()
+    void fetchBlocklist()
   }, [fetchFilters, fetchResults, fetchStats, fetchSaved, fetchBlocklist])
 
   const handleCloseFilter = useCallback(() => setCreateOpen(false), [])
   const handleSavedFilter = useCallback(() => { handleRefresh() }, [handleRefresh])
 
   const pageTitle = TABS.find((t) => t.key === activeTab)?.label || ''
+  const activeFilters = useMemo(() => filters.filter((f) => f.active).length, [filters])
+  const latestResultTitle = results[0]?.title
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex">
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-48 lg:w-56 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 h-screen">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800">
-          <h1 className="text-lg font-bold text-slate-950 dark:text-white tracking-tight">Job Bot</h1>
-        </div>
-        <div className="flex-1 p-3 overflow-y-auto">
-          <Tabs tabs={TABS} active={activeTab} onTabChange={setActiveTab} />
-        </div>
-        <div className="p-3 border-t border-slate-200 dark:border-slate-800 mt-auto">
-          <StatusBar status={status} />
-          <button
-            onClick={toggleTheme}
-            className="mt-2 w-full px-3 py-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer flex items-center gap-2"
-            aria-label={dark ? 'Светлая тема' : 'Тёмная тема'}
-          >
-            {dark ? '☀️' : '🌙'} {dark ? 'Светлая' : 'Тёмная'}
-          </button>
-        </div>
-      </aside>
-
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top header */}
-        <header className="sticky top-0 z-30 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 md:px-6 py-3 flex items-center justify-between gap-3">
-          {/* Mobile: sidebar toggle + title */}
-          <div className="flex items-center gap-3 md:hidden">
-            <h1 className="text-base font-bold text-slate-950 dark:text-white tracking-tight">Job Bot</h1>
-            <StatusBar status={status} />
-          </div>
-          <div className="hidden md:flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-slate-950 dark:text-white tracking-tight">{pageTitle}</h2>
-            <StatusBar status={status} />
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setCreateOpen(true); setSelectedFilterId(null) }}
-              className="px-3.5 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-[0.98] transition-all cursor-pointer"
-            >
-              ➕ Фильтр
-            </button>
-            <button
-              onClick={toggleTheme}
-              className="md:hidden px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-slate-500 dark:text-slate-400 transition-colors"
-              aria-label={dark ? 'Светлая тема' : 'Тёмная тема'}
-            >
-              {dark ? '☀️' : '🌙'}
-            </button>
-          </div>
-        </header>
-
-        {/* Mobile tabs */}
-        <div className="md:hidden px-4 pt-3 pb-1 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
-          <Tabs tabs={TABS} active={activeTab} onTabChange={setActiveTab} />
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 px-4 md:px-6 py-5">
-          {activeTab === 'search' && config && (
-            <ErrorBoundary>
-              <div className="space-y-4">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
-                  <FiltersPanel filters={filters} config={config} selectedId={selectedFilterId} onSelect={setSelectedFilterId} onRefresh={handleRefresh} />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleCheckNow}
-                    disabled={checkingNow}
-                    className="px-5 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm"
-                  >
-                    {checkingNow || checking ? (currentFilter ? `⏳ ${currentFilter}` : '⏳ Проверка...') : '🔍 Проверить сейчас'}
-                  </button>
-                  <button
-                    onClick={fetchResults}
-                    className="px-4 py-2.5 text-sm border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-slate-500 dark:text-slate-400 transition-colors"
-                  >
-                    🔄 Обновить
-                  </button>
-                </div>
-
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
-                  <ResultsPanel
-                    results={results} config={config} checkedAt={checkedAt} checking={checking}
-                    filters={filters} selectedFilterId={selectedFilterId} onRefreshResults={fetchResults}
-                  />
-                </div>
-              </div>
-            </ErrorBoundary>
-          )}
-
-          {activeTab === 'history' && config && (
-            <ErrorBoundary>
-              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
-                <HistoryPanel config={config} />
-              </div>
-            </ErrorBoundary>
-          )}
-
-          {activeTab === 'saved' && config && (
-            <ErrorBoundary>
-              <div className="space-y-4">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">📌 Сохранённые вакансии</h2>
-                  <SavedPanel saved={saved} config={config} onRefresh={fetchSaved} />
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
-                  <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">🚫 Блок-лист</h2>
-                  <BlocklistPanel items={blocklist} onRefresh={fetchBlocklist} />
-                </div>
-              </div>
-            </ErrorBoundary>
-          )}
-
-          {activeTab === 'stats' && (stats ? (
-            <ErrorBoundary>
-              <Suspense fallback={<div className="text-center py-20 text-slate-400"><p className="text-sm">Загрузка графиков...</p></div>}>
-                <StatsPanel stats={stats} />
-              </Suspense>
-            </ErrorBoundary>
-          ) : loadingSpinner)}
-
-          {!config && !configError && loadingSpinner}
-          {configError && (
-            <div className="text-center py-20 text-slate-400">
-              <p className="mb-3">Не удалось загрузить данные</p>
-              <button onClick={fetchConfig} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
-                Повторить
-              </button>
+    <div className="min-h-screen text-primary">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1680px]">
+        <aside className="hidden w-72 shrink-0 border-r border-[var(--border)] bg-[color:var(--surface)]/80 px-5 pb-6 pt-5 backdrop-blur xl:flex xl:flex-col">
+          <div className="mb-6 flex items-center gap-3 px-1">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl accent-gradient text-white shadow-[var(--shadow-sm)]">
+              <LayoutGrid className="h-5 w-5" />
             </div>
-          )}
-        </div>
+            <div>
+              <p className="text-sm font-semibold tracking-wide text-secondary">Платформа вакансий</p>
+              <h1 className="text-xl font-bold tracking-tight">Поиск и аналитика</h1>
+            </div>
+          </div>
+
+          <Tabs tabs={TABS} active={activeTab} onTabChange={setActiveTab} variant="sidebar" />
+
+          <div className="mt-auto space-y-3 rounded-2xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Статус источников</p>
+            <StatusBar status={status} compact />
+            <button
+              onClick={cycleTheme}
+              className="focus-ring flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[color:var(--surface-strong)] text-sm font-medium text-secondary transition hover:border-[var(--border-strong)] hover:text-primary"
+              aria-label="Сменить тему"
+            >
+              {themeMeta.icon}
+              <span className="btn-text">{themeMeta.label}</span>
+            </button>
+          </div>
+        </aside>
+
+        <main className="flex min-h-screen min-w-0 flex-1 flex-col pb-20 xl:pb-6">
+          <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[color:var(--surface)]/88 px-4 py-3 backdrop-blur md:px-6">
+            <div className="mx-auto flex w-full items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Рабочая область</p>
+                <div className="mt-0.5 flex items-center gap-2">
+                  <h2 className="text-lg font-semibold tracking-tight md:text-2xl">{pageTitle}</h2>
+                  <span className="hidden rounded-full border border-[var(--border)] bg-[color:var(--surface-elevated)] px-2.5 py-1 text-[11px] font-medium text-secondary md:inline-flex">
+                    Активная вкладка
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={cycleTheme}
+                  className="focus-ring inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] px-3 text-sm font-medium text-secondary transition hover:border-[var(--border-strong)] hover:text-primary xl:hidden"
+                  aria-label="Сменить тему"
+                >
+                  {themeMeta.icon}
+                  <span className="btn-text hidden sm:inline">{themeMeta.label}</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setCreateOpen(true)
+                    setSelectedFilterId(null)
+                  }}
+                  className="focus-ring inline-flex h-10 items-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)]"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="btn-text">Новый фильтр</span>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <div className="px-4 py-4 md:px-6 md:py-6">
+            {activeTab === 'search' && config && (
+              <ErrorBoundary>
+                <section className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+                    <article className="bento-card animate-soft-scale p-4 lg:col-span-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Активные фильтры</p>
+                      <p className="mt-2 text-3xl font-bold tracking-tight text-primary code">{activeFilters}</p>
+                      <p className="mt-1 text-xs text-secondary">Всего фильтров: {filters.length}</p>
+                    </article>
+                    <article className="bento-card animate-soft-scale p-4 lg:col-span-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Последний поиск</p>
+                      <p className="mt-2 line-clamp-2 text-sm font-medium text-primary">
+                        {latestResultTitle || 'Пока нет результатов. Запустите проверку и соберите первую выдачу.'}
+                      </p>
+                      {checkedAt && (
+                        <p className="mt-2 text-xs text-secondary">
+                          Обновлено {new Date(checkedAt).toLocaleString('ru-RU', {
+                            day: '2-digit',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                      )}
+                    </article>
+                    <article className="bento-card animate-soft-scale p-4 lg:col-span-5">
+                      <div className="flex h-full flex-col justify-between gap-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Проверка вакансий</p>
+                            <p className="mt-1 text-sm text-secondary">
+                              {checking
+                                ? currentFilter
+                                  ? `Сканируем фильтр: ${currentFilter}`
+                                  : 'Идёт проверка источников...'
+                                : 'Готово к запуску новой проверки'}
+                            </p>
+                          </div>
+                          {checking ? (
+                            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--accent-soft)] px-3 py-1 text-xs font-medium text-primary">
+                              <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--accent)]" />
+                              В процессе
+                            </span>
+                          ) : (
+                            <SearchCheck className="h-5 w-5 text-[var(--accent)]" />
+                          )}
+                        </div>
+                        <button
+                          onClick={handleCheckNow}
+                          disabled={checkingNow}
+                          className="focus-ring inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <BellRing className="h-4 w-4" />
+                          {checkingNow || checking ? 'Проверяем...' : 'Проверить сейчас'}
+                        </button>
+                      </div>
+                    </article>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+                    <section className="bento-card xl:col-span-4">
+                      <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Filter className="h-4 w-4 text-secondary" />
+                          <h3 className="text-sm font-semibold text-primary">Панель фильтров</h3>
+                        </div>
+                      </div>
+                      <div className="p-4">
+                        <FiltersPanel
+                          filters={filters}
+                          config={config}
+                          selectedId={selectedFilterId}
+                          onSelect={setSelectedFilterId}
+                          onRefresh={handleRefresh}
+                        />
+                      </div>
+                    </section>
+
+                    <section className="bento-card xl:col-span-8">
+                      <div className="border-b border-[var(--border)] px-4 py-3">
+                        <h3 className="text-sm font-semibold text-primary">Лента вакансий</h3>
+                      </div>
+                      <div className="p-4">
+                        <ResultsPanel
+                          results={results}
+                          config={config}
+                          checkedAt={checkedAt}
+                          checking={checking}
+                          filters={filters}
+                          selectedFilterId={selectedFilterId}
+                          onRefreshResults={fetchResults}
+                        />
+                      </div>
+                    </section>
+                  </div>
+                </section>
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'history' && config && (
+              <ErrorBoundary>
+                <section className="bento-card p-4 md:p-5">
+                  <HistoryPanel config={config} />
+                </section>
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'saved' && config && (
+              <ErrorBoundary>
+                <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+                  <article className="bento-card xl:col-span-8">
+                    <div className="border-b border-[var(--border)] px-4 py-3">
+                      <h3 className="text-sm font-semibold text-primary">Сохранённые вакансии</h3>
+                    </div>
+                    <div className="p-4">
+                      <SavedPanel saved={saved} config={config} onRefresh={fetchSaved} />
+                    </div>
+                  </article>
+
+                  <article className="bento-card xl:col-span-4">
+                    <div className="border-b border-[var(--border)] px-4 py-3">
+                      <h3 className="text-sm font-semibold text-primary">Блок-лист</h3>
+                    </div>
+                    <div className="p-4">
+                      <BlocklistPanel items={blocklist} onRefresh={fetchBlocklist} />
+                    </div>
+                  </article>
+                </section>
+              </ErrorBoundary>
+            )}
+
+            {activeTab === 'stats' && (
+              stats ? (
+                <ErrorBoundary>
+                  <Suspense fallback={loadingSpinner}>
+                    <StatsPanel stats={stats} />
+                  </Suspense>
+                </ErrorBoundary>
+              ) : loadingSpinner
+            )}
+
+            {!config && !configError && loadingSpinner}
+            {configError && (
+              <div className="bento-card p-8 text-center">
+                <p className="text-base font-medium text-primary">Не удалось загрузить данные</p>
+                <p className="mt-2 text-sm text-secondary">Проверьте backend и повторите запрос.</p>
+                <button
+                  onClick={fetchConfig}
+                  className="focus-ring mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)]"
+                >
+                  Повторить
+                </button>
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-[color:var(--surface)]/92 px-3 py-2 backdrop-blur xl:hidden">
+        <Tabs tabs={TABS} active={activeTab} onTabChange={setActiveTab} variant="bottom" />
       </div>
 
       {createOpen && config && (
         <ErrorBoundary>
           <FilterModal
+            key="create-filter"
             config={config}
             filter={null}
             onClose={handleCloseFilter}

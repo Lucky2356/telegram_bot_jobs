@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
+import { ChevronDown, X } from 'lucide-react'
 import type { AppConfig, FilterFormData, VacancyFilter } from '../types'
 import { api } from '../api'
-import { toast } from './Toast'
-import { X } from 'lucide-react'
+import { toast } from './toastBus'
 
 interface FilterModalProps {
   config: AppConfig
@@ -11,326 +11,340 @@ interface FilterModalProps {
   onSaved: () => void
 }
 
+function buildInitialForm(filter: VacancyFilter | null): FilterFormData {
+  if (!filter) {
+    return {
+      name: '',
+      keywords: [],
+      city: null,
+      salary_min: null,
+      salary_max: null,
+      employment_types: [],
+      sites: [],
+      exclude_keywords: [],
+      experience: null,
+    }
+  }
+
+  return {
+    name: filter.name,
+    keywords: filter.keywords,
+    city: filter.city,
+    salary_min: filter.salary_min,
+    salary_max: filter.salary_max,
+    employment_types: filter.employment_types,
+    sites: filter.sites,
+    exclude_keywords: filter.exclude_keywords,
+    experience: filter.experience,
+  }
+}
+
+function ToggleChip({
+  selected,
+  onClick,
+  children,
+}: {
+  selected: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`focus-ring max-w-full rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium leading-tight transition ${
+        selected
+          ? 'border-[var(--border-strong)] bg-[var(--accent-soft)] text-primary'
+          : 'border-[var(--border)] bg-[color:var(--surface-strong)] text-secondary hover:text-primary'
+      }`}
+    >
+      <span className="block break-words">{children}</span>
+    </button>
+  )
+}
+
 export default function FilterModal({ config, filter, onClose, onSaved }: FilterModalProps) {
   const isEdit = filter !== null
-  const [form, setForm] = useState<FilterFormData>({
-    name: '', keywords: [], city: null,
-    salary_min: null, salary_max: null,
-    employment_types: [], sites: [],
-    exclude_keywords: [], experience: null,
-  })
+  const [form, setForm] = useState<FilterFormData>(() => buildInitialForm(filter))
   const [saving, setSaving] = useState(false)
-  const [kwCollapsed, setKwCollapsed] = useState(false)
-  const [exCollapsed, setExCollapsed] = useState(true)
+  const [keywordsOpen, setKeywordsOpen] = useState(true)
+  const [excludeOpen, setExcludeOpen] = useState(false)
 
   useEffect(() => {
-    if (filter) {
-      setForm({
-        name: filter.name, keywords: filter.keywords, city: filter.city,
-        salary_min: filter.salary_min, salary_max: filter.salary_max,
-        employment_types: filter.employment_types, sites: filter.sites,
-        exclude_keywords: filter.exclude_keywords, experience: filter.experience,
-      })
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
     }
-  }, [filter])
-
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
+    document.addEventListener('keydown', onEscape)
+    return () => document.removeEventListener('keydown', onEscape)
   }, [onClose])
 
   const toggleKeyword = (kw: string) => {
     setForm((prev) => ({
       ...prev,
-      keywords: prev.keywords.includes(kw) ? prev.keywords.filter((k) => k !== kw) : [...prev.keywords, kw],
+      keywords: prev.keywords.includes(kw)
+        ? prev.keywords.filter((item) => item !== kw)
+        : [...prev.keywords, kw],
     }))
   }
 
   const toggleExclude = (kw: string) => {
     setForm((prev) => ({
       ...prev,
-      exclude_keywords: prev.exclude_keywords.includes(kw) ? prev.exclude_keywords.filter((k) => k !== kw) : [...prev.exclude_keywords, kw],
+      exclude_keywords: prev.exclude_keywords.includes(kw)
+        ? prev.exclude_keywords.filter((item) => item !== kw)
+        : [...prev.exclude_keywords, kw],
     }))
   }
 
   const toggleEmployment = (key: string) => {
     setForm((prev) => ({
       ...prev,
-      employment_types: prev.employment_types.includes(key) ? prev.employment_types.filter((e) => e !== key) : [...prev.employment_types, key],
+      employment_types: prev.employment_types.includes(key)
+        ? prev.employment_types.filter((item) => item !== key)
+        : [...prev.employment_types, key],
     }))
   }
 
   const toggleSite = (key: string) => {
     setForm((prev) => ({
       ...prev,
-      sites: prev.sites.includes(key) ? prev.sites.filter((s) => s !== key) : [...prev.sites, key],
+      sites: prev.sites.includes(key)
+        ? prev.sites.filter((item) => item !== key)
+        : [...prev.sites, key],
     }))
-  }
-
-  const handleSave = async () => {
-    if (!form.name.trim()) { toast.error('Введите название фильтра'); return }
-    if (form.keywords.length === 0) { toast.error('Выберите ключевые слова'); return }
-    if (form.sites.length === 0) { toast.error('Выберите сайты'); return }
-    setSaving(true)
-    try {
-      if (isEdit) {
-        await api.updateFilter(filter.id, form)
-        toast.success('Фильтр обновлён')
-      } else {
-        await api.createFilter(form)
-        toast.success('Фильтр создан')
-      }
-      onSaved(); onClose()
-    } catch { toast.error('Ошибка сохранения') }
-    finally { setSaving(false) }
   }
 
   const selectedSalary = config.salaries.find((s) => s[2] === form.salary_min && s[3] === form.salary_max)
   const salaryKey = selectedSalary ? selectedSalary[0] : 'any'
 
   const handleSalaryChange = (key: string) => {
-    if (key === 'any') { setForm((prev) => ({ ...prev, salary_min: null, salary_max: null })); return }
-    const salary = config.salaries.find((s) => s[0] === key)
-    if (salary) setForm((prev) => ({ ...prev, salary_min: salary[2], salary_max: salary[3] }))
+    if (key === 'any') {
+      setForm((prev) => ({ ...prev, salary_min: null, salary_max: null }))
+      return
+    }
+    const selected = config.salaries.find((item) => item[0] === key)
+    if (selected) {
+      setForm((prev) => ({ ...prev, salary_min: selected[2], salary_max: selected[3] }))
+    }
+  }
+
+  const handleSave = async () => {
+    if (!form.name.trim()) {
+      toast.error('Введите название фильтра')
+      return
+    }
+    if (form.keywords.length === 0) {
+      toast.error('Выберите ключевые слова')
+      return
+    }
+    if (form.sites.length === 0) {
+      toast.error('Выберите хотя бы один источник')
+      return
+    }
+
+    setSaving(true)
+    try {
+      if (isEdit && filter) {
+        await api.updateFilter(filter.id, form)
+        toast.success('Фильтр обновлён')
+      } else {
+        await api.createFilter(form)
+        toast.success('Фильтр создан')
+      }
+      onSaved()
+      onClose()
+    } catch {
+      toast.error('Не удалось сохранить фильтр')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/50 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-0 md:items-center md:p-4"
       role="dialog"
-      aria-label={isEdit ? 'Редактировать фильтр' : 'Создать фильтр'}
       aria-modal="true"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      aria-label={isEdit ? 'Редактирование фильтра' : 'Создание фильтра'}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
     >
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-800">
-        <div className="sticky top-0 bg-white dark:bg-slate-900 z-10 flex items-center justify-between px-6 pt-5 pb-3 border-b border-slate-200 dark:border-slate-800">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            {isEdit ? '✏️ Редактировать фильтр' : '➕ Создать фильтр'}
-          </h2>
+      <div className="animate-soft-scale flex h-[92vh] w-full max-w-4xl flex-col rounded-t-3xl border border-[var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--shadow-lg)] md:h-auto md:max-h-[92vh] md:rounded-2xl">
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[color:var(--surface)]/92 px-4 py-3 backdrop-blur md:px-6">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Конструктор фильтра</p>
+            <h2 className="text-base font-semibold text-primary md:text-lg">
+              {isEdit ? 'Редактирование фильтра' : 'Создание фильтра'}
+            </h2>
+          </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+            className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-elevated)] text-secondary transition hover:text-primary"
             aria-label="Закрыть"
           >
-            <X className="w-4 h-4" />
+            <X className="h-4 w-4" />
           </button>
-        </div>
+        </header>
 
-        <div className="px-6 py-4 space-y-4">
-          <div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Название</label>
+        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 md:px-6 md:py-5">
+          <section className="rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-4">
+            <label className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Название фильтра</label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-              className="w-full h-10 px-3.5 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-              placeholder="Мой фильтр"
+              placeholder="Например: Frontend Middle"
+              className="focus-ring mt-2 h-10 w-full rounded-xl border border-[var(--border)] bg-[color:var(--surface-strong)] px-3 text-sm text-primary placeholder:text-muted"
             />
-          </div>
+          </section>
 
-          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-            <button onClick={() => setKwCollapsed(!kwCollapsed)} className="flex items-center justify-between w-full text-left cursor-pointer">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Ключевые слова
-                <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium">{form.keywords.length}</span>
+          <section className="rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-4">
+            <button
+              onClick={() => setKeywordsOpen((prev) => !prev)}
+              className="focus-ring flex w-full items-center justify-between rounded-lg text-left"
+            >
+              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                Ключевые слова ({form.keywords.length})
               </span>
-              <span className="text-slate-400 text-sm">{kwCollapsed ? '▶' : '▼'}</span>
+              <ChevronDown className={`h-4 w-4 text-secondary transition ${keywordsOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {!kwCollapsed && (
+            {keywordsOpen && (
               <div className="mt-3 space-y-3">
-                {form.keywords.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {form.keywords.map((kw) => (
-                      <span key={kw} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-600 text-white">
-                        {kw}
-                        <button onClick={() => toggleKeyword(kw)} className="ml-0.5 hover:text-white/70 cursor-pointer" aria-label={`Убрать ${kw}`}>✕</button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {Object.entries(config.keyword_groups).map(([group, items]) => {
-                  const groupKws = Object.keys(items)
-                  const selectedCount = groupKws.filter((kw) => form.keywords.includes(kw)).length
-                  return (
-                    <div key={group}>
-                      <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1.5">
-                        {group}
-                        <span className="ml-1 font-normal text-slate-300 dark:text-slate-600">{selectedCount}/{groupKws.length}</span>
-                      </p>
-                      <div className="flex flex-wrap gap-1">
-                        {groupKws.map((kw) => {
-                          const sel = form.keywords.includes(kw)
-                          return (
-                            <button
-                              key={kw}
-                              onClick={() => toggleKeyword(kw)}
-                              className={`px-2.5 py-1 text-xs rounded-lg border transition-all cursor-pointer ${
-                                sel
-                                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-500 hover:text-blue-600'
-                              }`}
-                              aria-label={sel ? `Убрать ${kw}` : `Добавить ${kw}`}
-                            >
-                              {kw}
-                            </button>
-                          )
-                        })}
-                      </div>
+                {Object.entries(config.keyword_groups).map(([group, items]) => (
+                  <div key={group}>
+                    <p className="mb-1.5 text-xs font-semibold text-secondary">{group}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.keys(items).map((kw) => (
+                        <ToggleChip key={kw} selected={form.keywords.includes(kw)} onClick={() => toggleKeyword(kw)}>
+                          {kw}
+                        </ToggleChip>
+                      ))}
                     </div>
-                  )
-                })}
+                  </div>
+                ))}
               </div>
             )}
-          </div>
+          </section>
 
-          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-            <button onClick={() => setExCollapsed(!exCollapsed)} className="flex items-center justify-between w-full text-left cursor-pointer">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Исключить
-                {form.exclude_keywords.length > 0 && (
-                  <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-red-100 dark:bg-red-900/30 text-red-500 font-medium">{form.exclude_keywords.length}</span>
-                )}
+          <section className="rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-4">
+            <button
+              onClick={() => setExcludeOpen((prev) => !prev)}
+              className="focus-ring flex w-full items-center justify-between rounded-lg text-left"
+            >
+              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                Исключить слова ({form.exclude_keywords.length})
               </span>
-              <span className="text-slate-400 text-sm">{exCollapsed ? '▶' : '▼'}</span>
+              <ChevronDown className={`h-4 w-4 text-secondary transition ${excludeOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {!exCollapsed && (
-              <div className="mt-3">
-                {form.exclude_keywords.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {form.exclude_keywords.map((kw) => (
-                      <span key={kw} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-red-600 text-white">
-                        {kw}
-                        <button onClick={() => toggleExclude(kw)} className="ml-0.5 hover:text-white/70 cursor-pointer" aria-label={`Не исключать ${kw}`}>✕</button>
-                      </span>
-                    ))}
+            {excludeOpen && (
+              <div className="mt-3 space-y-3">
+                {Object.entries(config.keyword_groups).map(([group, items]) => (
+                  <div key={group}>
+                    <p className="mb-1.5 text-xs font-semibold text-secondary">{group}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.keys(items).map((kw) => (
+                        <ToggleChip key={kw} selected={form.exclude_keywords.includes(kw)} onClick={() => toggleExclude(kw)}>
+                          {kw}
+                        </ToggleChip>
+                      ))}
+                    </div>
                   </div>
-                )}
-                {Object.entries(config.keyword_groups).map(([group, items]) =>
-                  Object.keys(items).map((kw) => {
-                    const sel = form.exclude_keywords.includes(kw)
-                    return (
-                      <button
-                        key={`${group}-${kw}`}
-                        onClick={() => toggleExclude(kw)}
-                        className={`px-2.5 py-1 text-xs rounded-lg border transition-all cursor-pointer mr-1 mb-1 ${
-                          sel
-                            ? 'bg-red-600 text-white border-red-600 shadow-sm'
-                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-red-500 hover:text-red-500'
-                        }`}
-                        aria-label={sel ? `Не исключать ${kw}` : `Исключить ${kw}`}
-                      >
-                        {kw}
-                      </button>
-                    )
-                  }),
-                )}
+                ))}
               </div>
             )}
-          </div>
+          </section>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700">
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">📍 Город</label>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <section className="rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-4">
+              <label className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Город</label>
               <select
                 value={form.city ?? ''}
                 onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value || null }))}
-                className="w-full h-10 px-3 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                className="focus-ring mt-2 h-10 w-full rounded-xl border border-[var(--border)] bg-[color:var(--surface-strong)] px-3 text-sm text-primary"
               >
-                <option value="">🌍 Любой</option>
+                <option value="">Любой</option>
                 {Object.entries(config.cities).map(([key, label]) => (
-                  <option key={key} value={key}>📍 {label}</option>
+                  <option key={key} value={key}>{label}</option>
                 ))}
               </select>
-            </div>
-            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700">
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">💰 Зарплата</label>
+            </section>
+
+            <section className="rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-4">
+              <label className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Зарплата</label>
               <select
                 value={salaryKey}
                 onChange={(e) => handleSalaryChange(e.target.value)}
-                className="w-full h-10 px-3 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                className="focus-ring mt-2 h-10 w-full rounded-xl border border-[var(--border)] bg-[color:var(--surface-strong)] px-3 text-sm text-primary"
               >
-                {config.salaries.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                {config.salaries.map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
               </select>
-            </div>
+            </section>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700">
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">👔 Тип занятости</label>
-              <div className="flex flex-wrap gap-1.5">
-                {Object.entries(config.employment_types).map(([key, label]) => {
-                  const sel = form.employment_types.includes(key)
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => toggleEmployment(key)}
-                      className={`px-2.5 py-1 text-xs rounded-lg border transition-all cursor-pointer ${
-                        sel
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-500'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  )
-                })}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <section className="rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-4">
+              <label className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Тип занятости</label>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {Object.entries(config.employment_types).map(([key, label]) => (
+                  <ToggleChip
+                    key={key}
+                    selected={form.employment_types.includes(key)}
+                    onClick={() => toggleEmployment(key)}
+                  >
+                    {label}
+                  </ToggleChip>
+                ))}
               </div>
-            </div>
-            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700">
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">💼 Опыт</label>
+            </section>
+
+            <section className="rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-4">
+              <label className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Опыт</label>
               <select
                 value={form.experience ?? ''}
                 onChange={(e) => setForm((prev) => ({ ...prev, experience: e.target.value || null }))}
-                className="w-full h-10 px-3 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                className="focus-ring mt-2 h-10 w-full rounded-xl border border-[var(--border)] bg-[color:var(--surface-strong)] px-3 text-sm text-primary"
               >
                 <option value="">Любой</option>
-                {Object.entries(config.experiences).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                {Object.entries(config.experiences).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
               </select>
-            </div>
+            </section>
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700">
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-              🌐 Сайты
-              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium">{form.sites.length}</span>
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(config.sites).map(([key, label]) => {
-                const sel = form.sites.includes(key)
-                return (
-                  <button
-                    key={key}
-                    onClick={() => toggleSite(key)}
-                    className={`px-3 py-1.5 text-sm rounded-lg border transition-all cursor-pointer ${
-                      sel
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-500'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                )
-              })}
+          <section className="rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-4">
+            <label className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Источники ({form.sites.length})</label>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {Object.entries(config.sites).map(([key, label]) => (
+                <ToggleChip key={key} selected={form.sites.includes(key)} onClick={() => toggleSite(key)}>
+                  {label}
+                </ToggleChip>
+              ))}
             </div>
-          </div>
+          </section>
         </div>
 
-        <div className="sticky bottom-0 bg-white dark:bg-slate-900 flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-800">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors cursor-pointer">
+        <footer className="sticky bottom-0 grid grid-cols-2 gap-2 border-t border-[var(--border)] bg-[color:var(--surface)]/95 px-4 py-3 backdrop-blur md:flex md:justify-end md:px-6">
+          <button
+            onClick={onClose}
+            className="focus-ring h-10 rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] px-4 text-sm font-medium text-secondary transition hover:text-primary"
+          >
             Отмена
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-sm"
+            className="focus-ring h-10 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {saving ? '⏳ Сохранение...' : isEdit ? '💾 Сохранить' : '✅ Создать фильтр'}
+            {saving ? 'Сохранение...' : isEdit ? 'Сохранить изменения' : 'Создать фильтр'}
           </button>
-        </div>
+        </footer>
       </div>
     </div>
   )
 }
+

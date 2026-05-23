@@ -1,23 +1,19 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { Search, RefreshCw } from 'lucide-react'
 import type { HistoryItem, AppConfig } from '../types'
 import { api } from '../api'
-import { toast } from './Toast'
+import { toast } from './toastBus'
 
 interface HistoryPanelProps {
   config: AppConfig
 }
 
-const sourceColors: Record<string, string> = {
-  hh: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  superjob: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
-  trudvsem: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
-  rabota: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  habr: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
-}
-
 const sourceLabels: Record<string, string> = {
-  hh: 'hh.ru', superjob: 'SuperJob', trudvsem: 'Работа России',
-  rabota: 'rabota.ru', habr: 'Хабр Карьера',
+  hh: 'hh.ru',
+  superjob: 'SuperJob',
+  trudvsem: 'Работа России',
+  rabota: 'rabota.ru',
+  habr: 'Хабр Карьера',
 }
 
 function groupByDate(items: HistoryItem[]): [string, HistoryItem[]][] {
@@ -29,13 +25,14 @@ function groupByDate(items: HistoryItem[]): [string, HistoryItem[]][] {
   for (const h of items) {
     const date = new Date(h.sent_at)
     const dateStr = date.toDateString()
-    let label: string
+    let label = date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
     if (dateStr === today) label = 'Сегодня'
     else if (dateStr === yesterday) label = 'Вчера'
-    else if ((now.getTime() - date.getTime()) / 86400000 < 7) label = 'На этой неделе'
-    else label = date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+    else if ((now.getTime() - date.getTime()) / 86400000 < 7) label = 'Эта неделя'
+
     ;(groups[label] ??= []).push(h)
   }
+
   return Object.entries(groups)
 }
 
@@ -52,162 +49,154 @@ export default function HistoryPanel({ config }: HistoryPanelProps) {
     setLoading(true)
     try {
       const data = await api.getHistory(p, 20)
-      if (p === 1) {
-        setItems(data.items)
-      } else {
-        setItems((prev) => [...prev, ...data.items])
-      }
+      setItems((prev) => (p === 1 ? data.items : [...prev, ...data.items]))
       setHasMore(data.has_more)
       setPage(p)
     } catch {
-      toast.error('Ошибка загрузки истории')
+      toast.error('Не удалось загрузить историю')
     } finally {
       setLoading(false)
     }
   }, [])
 
-  const sources = useMemo(() => {
-    const set = new Set(items.map((h) => h.source))
-    return Array.from(set).sort()
-  }, [items])
-
-  const filtered = useMemo(() => {
-    return items.filter((h) => {
-      if (sourceFilter && h.source !== sourceFilter) return false
-      if (search) {
-        const q = search.toLowerCase()
-        return (
-          h.vacancy_title.toLowerCase().includes(q) ||
-          (h.company?.toLowerCase().includes(q) ?? false) ||
-          (h.filter_name?.toLowerCase().includes(q) ?? false)
-        )
-      }
-      return true
-    })
-  }, [items, search, sourceFilter])
-
-  const groups = useMemo(() => groupByDate(filtered), [filtered])
-
   useEffect(() => {
     if (items.length === 0 && !loading) {
-      fetchPage(1)
+      const timer = setTimeout(() => {
+        void fetchPage(1)
+      }, 0)
+      return () => clearTimeout(timer)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [items.length, loading, fetchPage])
 
   useEffect(() => {
     if (!hasMore || loading) return
     const sentinel = sentinelRef.current
     if (!sentinel) return
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          fetchPage(page + 1)
+          void fetchPage(page + 1)
         }
       },
-      { rootMargin: '200px' },
+      { rootMargin: '180px' },
     )
+
     observer.observe(sentinel)
     return () => observer.disconnect()
   }, [hasMore, loading, page, fetchPage])
 
+  const sources = useMemo(() => Array.from(new Set(items.map((h) => h.source))).sort(), [items])
+
+  const filtered = useMemo(
+    () => items.filter((h) => {
+      if (sourceFilter && h.source !== sourceFilter) return false
+      if (!search) return true
+      const q = search.toLowerCase()
+      return (
+        h.vacancy_title.toLowerCase().includes(q)
+        || (h.company?.toLowerCase().includes(q) ?? false)
+        || (h.filter_name?.toLowerCase().includes(q) ?? false)
+      )
+    }),
+    [items, sourceFilter, search],
+  )
+
+  const groups = useMemo(() => groupByDate(filtered), [filtered])
+
   if (items.length === 0 && loading) {
-    return (
-      <div className="text-center py-12 text-slate-400">
-        <p>⏳ Загрузка истории...</p>
-      </div>
-    )
+    return <p className="text-sm text-secondary">Загружаем историю...</p>
   }
 
   return (
-    <div>
-      <div className="flex flex-wrap gap-3 mb-4">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="🔍 Поиск по названию, компании или фильтру..."
-          className="flex-1 min-w-[200px] h-9 px-3 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-          aria-label="Поиск в истории"
-        />
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-12">
+        <div className="relative md:col-span-7">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Поиск по вакансии, компании или названию фильтра"
+            className="focus-ring h-10 w-full rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] pl-9 pr-3 text-sm text-primary placeholder:text-muted"
+          />
+        </div>
+
         <select
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value)}
-          className="h-9 px-3 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-          aria-label="Фильтр по сайту"
+          className="focus-ring h-10 rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] px-3 text-sm text-primary md:col-span-3"
+          aria-label="Фильтр по источнику"
         >
-          <option value="">Все сайты</option>
+          <option value="">Все источники</option>
           {sources.map((s) => (
             <option key={s} value={s}>{config.sites[s] || sourceLabels[s] || s}</option>
           ))}
         </select>
+
         <button
           onClick={() => fetchPage(1)}
-          className="h-9 px-3 text-sm border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+          className="focus-ring inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] text-secondary transition hover:text-primary md:col-span-2"
           aria-label="Обновить историю"
         >
-          🔄
+          <RefreshCw className="h-4 w-4" />
         </button>
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-12 text-slate-400">
-          <p className="text-base">Ничего не найдено</p>
+        <div className="rounded-xl border border-dashed border-[var(--border)] bg-[color:var(--surface-elevated)] p-8 text-center">
+          <p className="text-base font-medium text-primary">История пока пустая</p>
+          <p className="mt-2 text-sm text-secondary">Запустите проверку и дождитесь отправки вакансий в Telegram.</p>
         </div>
       )}
 
-      <div className="space-y-6">
-        {groups.map(([label, groupItems]) => (
-          <div key={label}>
-            <h3 className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
-              {label}
-              <span className="ml-2 font-normal text-slate-300 dark:text-slate-600">{groupItems.length}</span>
+      <div className="space-y-5">
+        {groups.map(([dateLabel, dateItems]) => (
+          <section key={dateLabel} className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+              {dateLabel}
+              <span className="ml-2 rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium text-secondary">
+                {dateItems.length}
+              </span>
             </h3>
-            <div className="space-y-2">
-              {groupItems.map((h, idx) => (
-                <a
-                  key={`${h.sent_at}-${idx}`}
-                  href={h.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 group"
-                  aria-label={`Открыть ${h.vacancy_title}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                        {h.vacancy_title}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
-                        {h.company && <span>🏢 {h.company}</span>}
-                        {h.salary && <span className="text-emerald-600 dark:text-emerald-400 font-medium">💰 {h.salary}</span>}
-                        {h.filter_name && <span className="text-slate-400">📋 {h.filter_name}</span>}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <span
-                        className={`px-2 py-0.5 text-[10px] font-medium rounded-md ${
-                          sourceColors[h.source] || 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                        }`}
-                      >
-                        {sourceLabels[h.source] || h.source}
-                      </span>
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap">
-                        {new Date(h.sent_at).toLocaleString('ru-RU', {
-                          hour: '2-digit', minute: '2-digit',
-                        })}
-                      </span>
+
+            {dateItems.map((item, idx) => (
+              <a
+                key={`${item.sent_at}-${idx}`}
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group block rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-3 transition hover:border-[var(--border-strong)]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-primary">{item.vacancy_title}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-secondary">
+                      {item.company && <span>{item.company}</span>}
+                      {item.salary && <span className="font-semibold text-emerald-400">{item.salary}</span>}
+                      {item.filter_name && (
+                        <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px]">{item.filter_name}</span>
+                      )}
                     </div>
                   </div>
-                </a>
-              ))}
-            </div>
-          </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">
+                      {sourceLabels[item.source] || item.source}
+                    </p>
+                    <p className="mt-1 text-[10px] text-secondary">
+                      {new Date(item.sent_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              </a>
+            ))}
+          </section>
         ))}
       </div>
 
       {hasMore && (
-        <div ref={sentinelRef} className="text-center mt-6">
-          {loading && <span className="text-sm text-slate-400">⏳ Загрузка...</span>}
+        <div ref={sentinelRef} className="py-2 text-center text-xs text-secondary">
+          {loading ? 'Загружаем ещё...' : 'Прокрутите ниже для загрузки'}
         </div>
       )}
     </div>

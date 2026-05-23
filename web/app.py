@@ -4,8 +4,8 @@ import os
 import logging
 import uvicorn
 from pydantic import BaseModel
-from fastapi import FastAPI, Request, Depends, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.status import HTTP_401_UNAUTHORIZED
@@ -38,16 +38,13 @@ class FilterUpdate(BaseModel):
 
 
 async def _get_first_user(db: Database):
-    from sqlalchemy import select as sa_select
-    from core.database.models import User as UserModel
-    async with db.session_factory() as session:
-        user = (await session.execute(sa_select(UserModel))).scalar_one_or_none()
-        if user is None:
-            user = UserModel(telegram_id=0, username="web_user")
-            session.add(user)
-            await session.commit()
-            await session.refresh(user)
-        return user
+    real_user = await db.get_first_real_user()
+    if real_user is not None:
+        web_user = await db.get_user_by_telegram_id(0)
+        if web_user is not None and web_user.id != real_user.id:
+            await db.merge_user_data(source_user_id=web_user.id, target_user_id=real_user.id)
+        return real_user
+    return await db.get_or_create_user(telegram_id=0, username="web_user")
 
 
 async def _serve_react_or_fallback(app: FastAPI, request: Request, templates: Jinja2Templates):
@@ -111,7 +108,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             return {"ok": True, "token": create_token()}
         if not settings.WEB_PASSWORD:
             return {"ok": True, "token": create_token()}
-        return {"ok": False, "message": "Неверный пароль"}, HTTP_401_UNAUTHORIZED
+        return JSONResponse({"ok": False, "message": "Неверный пароль"}, status_code=HTTP_401_UNAUTHORIZED)
 
     @app.get("/api/config")
     async def api_config():
@@ -230,7 +227,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             experience=data.experience,
         )
         if vf is None:
-            return {"ok": False, "message": "Filter not found"}, 404
+            return JSONResponse({"ok": False, "message": "Filter not found"}, status_code=404)
         return {"ok": True, "filter": {
             "id": vf.id,
             "name": vf.name,
@@ -254,7 +251,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     async def api_clone_filter(filter_id: int):
         vf = await db.get_filter(filter_id)
         if vf is None:
-            return {"ok": False, "message": "Filter not found"}, 404
+            return JSONResponse({"ok": False, "message": "Filter not found"}, status_code=404)
         user = await _get_first_user(db)
         cloned = await db.create_filter(
             user_id=user.id,
@@ -324,7 +321,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.get("/api/saved")
     async def api_saved():
-        saved = await db.get_saved_vacancies()
+        user = await _get_first_user(db)
+        saved = await db.get_saved_vacancies(user.id)
         return [
             {
                 "id": sv.id,
@@ -344,7 +342,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.get("/api/blocklist")
     async def api_blocklist():
-        blocks = await db.get_blocklist()
+        user = await _get_first_user(db)
+        blocks = await db.get_blocklist(user.id)
         return [
             {"id": b.id, "pattern": b.pattern, "type": b.type}
             for b in blocks
@@ -366,7 +365,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
         user = await _get_first_user(db)
         vac = await db.get_vacancy_by_id(vacancy_id)
         if not vac:
-            return {"ok": False, "message": "Vacancy not found"}, 404
+            return JSONResponse({"ok": False, "message": "Vacancy not found"}, status_code=404)
         await db.save_vacancy(user.id, vacancy_id)
         return {"ok": True}
 
@@ -381,7 +380,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
         user = await _get_first_user(db)
         vac = await db.get_vacancy_by_id(vacancy_id)
         if not vac:
-            return {"ok": False, "message": "Vacancy not found"}, 404
+            return JSONResponse({"ok": False, "message": "Vacancy not found"}, status_code=404)
         if vac.company:
             await db.add_blocklist(user.id, vac.company, "company")
         return {"ok": True}

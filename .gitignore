@@ -1,5 +1,6 @@
 # Environment (contains secrets)
 .env
+.jwt_secret
 
 # Python cache
 __pycache__/
@@ -9,6 +10,7 @@ __pycache__/
 vacancies.db
 vacancies.db-journal
 debug.db
+.codex-webtest.db
 
 # Node
 node_modules/

@@ -13,6 +13,10 @@ router = Router()
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.VAC_SAVE))
 async def on_vacancy_save(callback: CallbackQuery, db: Database):
     vacancy_id = int(FilterCallback.unpack(callback.data).value)
+    vac = await db.get_vacancy_by_id(vacancy_id)
+    if vac is None:
+        await callback.answer("Вакансия не найдена", show_alert=True)
+        return
     user = await db.get_or_create_user(callback.from_user.id)
     await db.save_vacancy(user.id, vacancy_id)
     await callback.answer("✅ Вакансия сохранена!")
@@ -25,7 +29,7 @@ async def on_vacancy_block(callback: CallbackQuery, db: Database):
     if len(parts) != 2:
         await callback.answer("Ошибка")
         return
-    vacancy_id, source = int(parts[0]), parts[1]
+    vacancy_id = int(parts[0])
     user = await db.get_or_create_user(callback.from_user.id)
     from core.database.models import Vacancy
     from sqlalchemy import select

@@ -10,35 +10,41 @@ interface ConfirmModalProps {
 }
 
 export default function ConfirmModal({
-  open, title, message, confirmLabel = 'Да', cancelLabel = 'Отмена',
-  onConfirm, onCancel, danger = false,
+  open,
+  title,
+  message,
+  confirmLabel = 'Да',
+  cancelLabel = 'Отмена',
+  onConfirm,
+  onCancel,
+  danger = false,
 }: ConfirmModalProps) {
   if (!open) return null
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-3 md:items-center md:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel()
+      }}
     >
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-slate-800 p-6">
-        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-2">{title}</h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">{message}</p>
-        <div className="flex items-center justify-end gap-2">
+      <div className="animate-soft-scale w-full max-w-md rounded-2xl border border-[var(--border)] bg-[color:var(--surface-strong)] p-5 shadow-[var(--shadow-lg)]">
+        <h3 className="text-base font-semibold text-primary">{title}</h3>
+        <p className="mt-2 text-sm text-secondary">{message}</p>
+        <div className="mt-6 flex items-center justify-end gap-2">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors cursor-pointer"
+            className="focus-ring inline-flex h-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] px-4 text-sm font-medium text-secondary transition hover:border-[var(--border-strong)] hover:text-primary"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
-            className={`px-5 py-2 text-sm font-medium rounded-lg text-white transition-colors cursor-pointer shadow-sm ${
-              danger
-                ? 'bg-red-600 hover:bg-red-700'
-                : 'bg-blue-600 hover:bg-blue-700'
+            className={`focus-ring inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold text-white transition ${
+              danger ? 'bg-rose-500 hover:bg-rose-600' : 'bg-[var(--accent)] hover:bg-[var(--accent-hover)]'
             }`}
           >
             {confirmLabel}

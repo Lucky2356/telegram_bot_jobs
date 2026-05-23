@@ -1,74 +1,64 @@
+import type { ReactNode } from 'react'
 import { Search, History, Bookmark, BarChart3 } from 'lucide-react'
 
-const iconMap: Record<string, React.ReactNode> = {
-  search: <Search className="w-4 h-4" />,
-  history: <History className="w-4 h-4" />,
-  saved: <Bookmark className="w-4 h-4" />,
-  stats: <BarChart3 className="w-4 h-4" />,
+type TabItem = {
+  key: string
+  label: string
+  shortLabel?: string
+  icon?: string
 }
 
 interface TabsProps {
-  tabs: { key: string; label: string }[]
+  tabs: TabItem[]
   active: string
   onTabChange: (key: string) => void
+  variant?: 'sidebar' | 'bottom'
 }
 
-export default function Tabs({ tabs, active, onTabChange }: TabsProps) {
-  const handleKeyDown = (key: string) => (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTabChange(key) }
-  }
+const iconMap: Record<string, ReactNode> = {
+  search: <Search className="h-4 w-4" />,
+  history: <History className="h-4 w-4" />,
+  saved: <Bookmark className="h-4 w-4" />,
+  stats: <BarChart3 className="h-4 w-4" />,
+}
+
+export default function Tabs({ tabs, active, onTabChange, variant = 'sidebar' }: TabsProps) {
+  const isSidebar = variant === 'sidebar'
 
   return (
-    <>
-      {/* Desktop sidebar */}
-      <nav className="hidden md:flex flex-col gap-1 w-56 shrink-0" role="tablist">
-        {tabs.map((tab) => {
-          const isActive = active === tab.key
-          return (
-            <button
-              key={tab.key}
-              role="tab"
-              aria-selected={isActive}
-              tabIndex={0}
-              onClick={() => onTabChange(tab.key)}
-              onKeyDown={handleKeyDown(tab.key)}
-              className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all cursor-pointer ${
-                isActive
-                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300'
-              }`}
-            >
-              {iconMap[tab.key] || null}
-              <span>{tab.label}</span>
-            </button>
-          )
-        })}
-      </nav>
+    <nav
+      role="tablist"
+      aria-orientation={isSidebar ? 'vertical' : 'horizontal'}
+      className={isSidebar ? 'flex flex-col gap-1' : 'grid grid-cols-4 gap-1'}
+    >
+      {tabs.map((tab) => {
+        const isActive = active === tab.key
 
-      {/* Mobile horizontal tabs */}
-      <div className="flex md:hidden gap-1 overflow-x-auto pb-1" role="tablist">
-        {tabs.map((tab) => {
-          const isActive = active === tab.key
-          return (
-            <button
-              key={tab.key}
-              role="tab"
-              aria-selected={isActive}
-              tabIndex={0}
-              onClick={() => onTabChange(tab.key)}
-              onKeyDown={handleKeyDown(tab.key)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-all cursor-pointer ${
-                isActive
-                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950'
-                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              {iconMap[tab.key] || null}
-              <span>{tab.label}</span>
-            </button>
-          )
-        })}
-      </div>
-    </>
+        return (
+          <button
+            key={tab.key}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onTabChange(tab.key)}
+            className={isSidebar
+              ? `focus-ring flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition ${
+                  isActive
+                    ? 'bg-[var(--accent-soft)] text-primary border border-[var(--border-strong)]'
+                    : 'text-secondary hover:bg-[color:var(--surface-elevated)] hover:text-primary border border-transparent'
+                }`
+              : `focus-ring flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[11px] font-medium transition ${
+                  isActive
+                    ? 'bg-[var(--accent-soft)] text-primary border border-[var(--border-strong)]'
+                    : 'text-secondary hover:bg-[color:var(--surface-elevated)] hover:text-primary border border-transparent'
+                }`
+            }
+          >
+            {iconMap[tab.icon || tab.key] || null}
+            <span className={isSidebar ? 'truncate' : 'max-w-full truncate'}>{isSidebar ? tab.label : (tab.shortLabel || tab.label)}</span>
+          </button>
+        )
+      })}
+    </nav>
   )
 }
+

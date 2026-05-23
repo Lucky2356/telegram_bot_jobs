@@ -15,10 +15,10 @@ from core.scheduler import Scheduler
 router = Router()
 
 
-async def _safe_edit(msg, text=None, reply_markup=None):
+async def _safe_edit(msg, text=None, reply_markup=None, **kwargs):
     try:
         if text is not None:
-            await msg.edit_text(text=text, reply_markup=reply_markup)
+            await msg.edit_text(text=text, reply_markup=reply_markup, **kwargs)
         elif reply_markup is not None:
             await msg.edit_reply_markup(reply_markup=reply_markup)
     except TelegramBadRequest as e:

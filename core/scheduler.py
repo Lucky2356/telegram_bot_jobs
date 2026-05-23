@@ -32,7 +32,7 @@ class Scheduler:
 
     async def _publish(self, event: dict):
         try:
-            await self.event_queue.put(event)
+            self.event_queue.put_nowait(event)
         except asyncio.QueueFull:
             pass
 
@@ -124,6 +124,9 @@ class Scheduler:
                 continue
             user = await self.db.get_user(user_id)
             if not user:
+                continue
+            if user.telegram_id <= 0:
+                logger.info("Skip Telegram send for non-Telegram user_id=%s", user_id)
                 continue
             header = f"🔍 <b>Найдено {len(items)} новых вакансий</b>"
             try:
@@ -249,7 +252,9 @@ class Scheduler:
 
         vac = await self.db.add_vacancy(vac_data)
         if vac is None:
-            return
+            vac = await self.db.get_vacancy_by_source(vac_data.source, vac_data.source_id)
+            if vac is None:
+                return
 
         if await self.db.is_sent(user.id, vac.id):
             return

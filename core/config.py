@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     WEB_PORT: int = 8000
     CHECK_INTERVAL_HOURS: int = 1
     WEB_PASSWORD: str = ""
+    TELEGRAM_PROXY: str = ""
 
 
 settings = Settings()

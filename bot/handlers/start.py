@@ -3,7 +3,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from bot.keyboards import build_start_keyboard, FilterCallback, WizardAction, build_keywords_keyboard, build_keyword_groups_keyboard
+from bot.keyboards import build_start_keyboard, FilterCallback, WizardAction, build_keyword_groups_keyboard
 from bot.handlers.filters import FilterWizard
 from core.database.repository import Database
 
@@ -18,9 +18,8 @@ async def _safe_edit(msg, text=None, reply_markup=None):
             await msg.edit_reply_markup(reply_markup=reply_markup)
     except TelegramBadRequest as e:
         if 'message is not modified' in str(e):
-            pass
-        else:
-            raise
+            return
+        raise
 
 
 @router.message(CommandStart())
@@ -29,14 +28,16 @@ async def cmd_start(message: Message, db: Database):
         telegram_id=message.from_user.id,
         username=message.from_user.username,
     )
+
     await message.answer(
-        "👋 Привет! Я бот для поиска вакансий.\n\n"
-        "С помощью меня ты сможешь:\n"
-        "🔍 Находить вакансии с hh.ru, SuperJob, rabota.ru, "
-        "Хабр Карьеры и Работы России\n"
-        "⚡ Получать их в Telegram по заданным фильтрам\n"
-        "🌐 Управлять фильтрами через веб-интерфейс\n\n"
-        "Нажми «➕ Добавить фильтр», чтобы начать!",
+        "👋 <b>Привет! Это Vacancy Scout.</b>\n\n"
+        "Я собираю вакансии с hh.ru, SuperJob, rabota.ru, Хабр Карьеры и Работы России, "
+        "фильтрую и отправляю тебе только релевантные позиции.\n\n"
+        "<b>Что можно делать:</b>\n"
+        "• Настроить фильтры поиска\n"
+        "• Получать подборки в Telegram\n"
+        "• Управлять всем через веб-панель\n\n"
+        "Нажми <b>«Добавить фильтр»</b>, чтобы получить первую подборку.",
         reply_markup=build_start_keyboard(),
     )
 
@@ -45,15 +46,22 @@ async def cmd_start(message: Message, db: Database):
 async def main_filters(callback: CallbackQuery, db: Database):
     user = await db.get_or_create_user(callback.from_user.id)
     filters = await db.get_user_filters(user.id)
+
     if not filters:
-        await _safe_edit(callback.message, text="У тебя пока нет фильтров. Создай первый!",
+        await _safe_edit(
+            callback.message,
+            text="У тебя пока нет фильтров. Создай первый, чтобы начать поиск.",
             reply_markup=build_start_keyboard(),
         )
     else:
         from bot.keyboards import build_filters_list_keyboard
-        await _safe_edit(callback.message, text="📋 Твои фильтры вакансий:",
+
+        await _safe_edit(
+            callback.message,
+            text="📋 <b>Твои фильтры вакансий</b>",
             reply_markup=build_filters_list_keyboard(filters),
         )
+
     await callback.answer()
 
 
@@ -71,9 +79,13 @@ async def main_add(callback: CallbackQuery, state: FSMContext):
         sites=[],
     )
     await state.set_state(FilterWizard.keywords)
-    await _safe_edit(callback.message, text="Шаг 1 — Выбери категорию ключевых слов\n\n"
-        "Нажми на категорию, чтобы увидеть слова внутри.\n"
-        "Можно выбрать слова из нескольких категорий.",
+
+    await _safe_edit(
+        callback.message,
+        text=(
+            "Шаг 1/9 — выбери группы ключевых слов\n\n"
+            "Открой нужные категории и отметь роли, по которым искать вакансии."
+        ),
         reply_markup=build_keyword_groups_keyboard([]),
     )
     await callback.answer()

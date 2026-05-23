@@ -15,7 +15,7 @@ from bot.keyboards import (
     build_confirm_keyboard, build_start_keyboard,
     build_filters_list_keyboard,
     SALARIES, EXPERIENCE, EMPLOYMENT_TYPES, SITES, KEYWORDS_BY_GROUP,
-    _ID_KW,
+    _ID_KW, _ID_GROUP,
 )
 from core.database.repository import Database
 
@@ -71,7 +71,8 @@ async def cmd_add_filter(message: Message, state: FSMContext):
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.KW_GROUP_SELECT))
 async def on_keyword_group_select(callback: CallbackQuery, state: FSMContext):
-    group = FilterCallback.unpack(callback.data).value
+    group_id = FilterCallback.unpack(callback.data).value
+    group = _ID_GROUP.get(group_id, group_id)
     data = await state.get_data()
     selected: list[str] = data.get("selected_keywords", [])
     await _safe_edit(callback.message, text=f"📁 {group}\n\nНажимай на слова, чтобы добавить их в фильтр.",
@@ -82,6 +83,7 @@ async def on_keyword_group_select(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.KW_GROUP_BACK))
 async def on_keyword_group_back(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(FilterWizard.keywords)
     data = await state.get_data()
     selected: list[str] = data.get("selected_keywords", [])
     cnt = len(selected)
@@ -132,7 +134,6 @@ async def on_keyword_done(callback: CallbackQuery, state: FSMContext):
     if not selected:
         await callback.answer("Выбери хотя бы одно ключевое слово!", show_alert=True)
         return
-    await callback.answer(f"✅ Выбрано {len(selected)} слов")
     await state.set_state(FilterWizard.exclude_keywords)
     excluded = data.get("excluded_keywords", [])
     await _safe_edit(callback.message, text="Выбери слова, которые нужно ИСКЛЮЧИТЬ\n\n"
@@ -140,7 +141,7 @@ async def on_keyword_done(callback: CallbackQuery, state: FSMContext):
         "Если нет — просто нажми «Далее».",
         reply_markup=build_exclude_keywords_keyboard(excluded),
     )
-    await callback.answer()
+    await callback.answer(f"✅ Выбрано {len(selected)} слов")
 
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.EXCLUDE_TOGGLE))
