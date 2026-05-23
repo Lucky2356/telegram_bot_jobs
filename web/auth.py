@@ -29,7 +29,9 @@ TOKEN_TTL = 86400  # 24 hours
 
 
 def create_token() -> str:
-    payload = json.dumps({"exp": int(time.time()) + TOKEN_TTL}, separators=(",", ":"))
+    from core.config import settings
+    password_hash = hashlib.sha256(settings.WEB_PASSWORD.encode()).hexdigest()[:16] if settings.WEB_PASSWORD else "nopass"
+    payload = json.dumps({"exp": int(time.time()) + TOKEN_TTL, "sub": password_hash}, separators=(",", ":"))
     payload_b64 = base64.urlsafe_b64encode(payload.encode()).rstrip(b"=").decode()
     sig = hmac.new(SECRET.encode(), payload_b64.encode(), hashlib.sha256).hexdigest()
     return f"{payload_b64}.{sig}"

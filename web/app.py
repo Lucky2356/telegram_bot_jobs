@@ -150,7 +150,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     async def api_create_filter(data: FilterUpdate):
         user = await _get_first_user(db)
         vf = await db.create_filter(
-            user_id=user.id if user else 1,
+            user_id=user.id,
             name=data.name,
             keywords=data.keywords,
             city=data.city,
@@ -394,10 +394,9 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.get("/api/status")
     async def api_status():
-        from core.config import settings as app_settings
         return {
-            "hh": bool(app_settings.HH_CLIENT_ID and app_settings.HH_CLIENT_SECRET),
-            "superjob": bool(app_settings.SUPERJOB_API_KEY),
+            "hh": bool(settings.HH_CLIENT_ID and settings.HH_CLIENT_SECRET),
+            "superjob": bool(settings.SUPERJOB_API_KEY),
             "trudvsem": True,
             "rabota": True,
             "habr": True,

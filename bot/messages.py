@@ -28,6 +28,8 @@ def _relative_date(dt: datetime | None) -> str:
     diff = now - dt
     days = diff.days
     if days < 0:
+        import logging
+        logging.getLogger(__name__).warning("Vacancy has future published_at date: %s", dt.isoformat())
         return ""
     if days == 0:
         hours = diff.seconds // 3600
