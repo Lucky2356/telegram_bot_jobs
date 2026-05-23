@@ -267,6 +267,12 @@ def _build_keyword_grid(
     title: str, back_action: WizardAction | None = None,
 ) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    # Navigation at top so users can proceed without scrolling through all keywords
+    top_row = []
+    if back_action:
+        top_row.append(_btn("⬅️ Назад", back_action))
+    top_row.append(_btn(f"✅ {title}", done_action))
+    builder.row(*top_row)
     for group_name, kw_dict in KEYWORDS_BY_GROUP.items():
         builder.row(
             InlineKeyboardButton(
