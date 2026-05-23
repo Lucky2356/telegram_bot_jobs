@@ -1,7 +1,6 @@
 import asyncio
 import sys
 import os
-import signal
 import logging
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
@@ -78,36 +77,10 @@ async def main():
     logger.info("DB cleanup scheduled daily at 03:00")
 
     logger.info("Starting Telegram bot polling...")
-    stop_signal = asyncio.Event()
-
-    def _on_signal():
-        logger.info("Shutdown signal received, stopping...")
-        stop_signal.set()
-
-    loop = asyncio.get_event_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(sig, _on_signal)
-        except NotImplementedError:
-            pass  # Windows may not support add_signal_handler
-
-    async def _wait_or_cancel(coro):
-        """Run coroutine until stop_signal is set, then cancel."""
-        task = asyncio.create_task(coro)
-        await asyncio.wait(
-            {task, asyncio.create_task(stop_signal.wait())},
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        task.cancel()
-        try:
-            await task
-        except (asyncio.CancelledError, KeyboardInterrupt):
-            pass
-
     try:
         await asyncio.gather(
-            _wait_or_cancel(dp.start_polling(bot)),
-            _wait_or_cancel(run_web(db, scheduler_obj)),
+            dp.start_polling(bot),
+            run_web(db, scheduler_obj),
             return_exceptions=True,
         )
     except (asyncio.CancelledError, KeyboardInterrupt):
@@ -118,6 +91,10 @@ async def main():
         await scheduler_obj.close()
         try:
             await bot.session.close()
+        except Exception:
+            pass
+        try:
+            await db.engine.dispose()
         except Exception:
             pass
         logger.info("Bye!")
