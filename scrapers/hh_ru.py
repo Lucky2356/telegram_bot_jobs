@@ -107,12 +107,17 @@ class HHScraper(BaseScraper):
                 if employment:
                     emp_id = employment.get("id")
                     mapping = {"full": "full", "part": "part", "project": "project",
-                               "probation": "internship", "volunteer": "internship"}
+                               "probation": "internship", "volunteer": "internship",
+                               "temporary": "project"}
                     emp_type = mapping.get(emp_id)
 
                 schedule = item.get("schedule")
                 if schedule and schedule.get("id") == "remote":
-                    emp_type = "remote"
+                    if emp_type not in ("remote", None):
+                        # Both: remote schedule + employment type (e.g. full-time remote)
+                        pass  # Keep employment type, remote is implied
+                    else:
+                        emp_type = "remote"
 
                 exp = None
                 experience = item.get("experience")
