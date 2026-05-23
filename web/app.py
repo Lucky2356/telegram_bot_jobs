@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import logging
 import uvicorn
 from pydantic import BaseModel
 from fastapi import FastAPI, Request, Depends, HTTPException
@@ -300,17 +301,23 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
                 pass
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+    async def _run_task(coro, name: str):
+        try:
+            await coro
+        except Exception as e:
+            logging.getLogger(__name__).error("Background task '%s' failed: %s", name, e, exc_info=True)
+
     @app.post("/api/check_now")
     async def api_check_now():
         if scheduler:
-            asyncio.create_task(scheduler.run_check())
+            asyncio.create_task(_run_task(scheduler.run_check(), "check_all"))
             return {"ok": True, "message": "Проверка запущена!"}
         return {"ok": False, "message": "Scheduler not available"}
 
     @app.post("/api/filters/{filter_id}/check")
     async def api_check_filter(filter_id: int):
         if scheduler:
-            asyncio.create_task(scheduler.run_check_for_filter(filter_id))
+            asyncio.create_task(_run_task(scheduler.run_check_for_filter(filter_id), f"check_filter_{filter_id}"))
             return {"ok": True, "message": "Проверка фильтра запущена!"}
         return {"ok": False, "message": "Scheduler not available"}
 
@@ -398,7 +405,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.get("/api/results")
     async def api_results():
-        checking = scheduler._lock.locked() if scheduler else False
+        checking = scheduler.is_checking if scheduler else False
         if scheduler:
             items = scheduler.get_last_results()
             if items:

@@ -26,6 +26,10 @@ class Scheduler:
         self.last_results_time: str | None = None
         self.event_queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=100)
 
+    @property
+    def is_checking(self) -> bool:
+        return self._lock.locked()
+
     async def _publish(self, event: dict):
         try:
             await self.event_queue.put(event)
@@ -100,7 +104,7 @@ class Scheduler:
                 await self._publish({"type": "check_complete", "total_found": 0})
                 return
             await self._publish({"type": "filter_started", "filter_id": vf.id, "filter_name": vf.name})
-            await self._check_filter(vf)
+            await self._check_filter(vf, user)
             found = sum(len(v) for v in self._user_buffers.values())
             await self._publish({"type": "filter_done", "filter_id": vf.id, "filter_name": vf.name, "found": found})
             self._user_buffers.clear()
@@ -142,7 +146,8 @@ class Scheduler:
                     await asyncio.sleep(0.5)
                 except Exception as e:
                     logger.warning("Failed to send vacancy %s: %s", vac_id, e)
-        self._user_buffers.clear()
+        # Note: do NOT clear _user_buffers here — run_check/run_check_for_filter
+        # clear before populating; clearing here races with concurrent checks.
 
     async def _safe_send_to_telegram(self):
         try:
@@ -186,10 +191,11 @@ class Scheduler:
             asyncio.create_task(self._safe_send_to_telegram())
         logger.info("Vacancy check completed.")
 
-    async def _check_filter(self, vf):
-        user = await self.db.get_user(vf.user_id)
-        if not user:
-            return
+    async def _check_filter(self, vf, user=None):
+        if user is None:
+            user = await self.db.get_user(vf.user_id)
+            if not user:
+                return
 
         keywords = vf.get_keywords()
         search_terms = get_synonyms(keywords)
