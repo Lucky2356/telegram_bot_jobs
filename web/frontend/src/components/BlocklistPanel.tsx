@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { BlocklistItem } from '../types'
 import { api } from '../api'
 import { toast } from './Toast'
+import { X, Plus } from 'lucide-react'
 
 interface BlocklistPanelProps {
   items: BlocklistItem[]
@@ -40,20 +41,19 @@ export default function BlocklistPanel({ items, onRefresh }: BlocklistPanelProps
 
   return (
     <div className="space-y-3">
-      {/* Add form */}
       <div className="flex items-center gap-2">
         <input
           type="text"
           value={pattern}
           onChange={(e) => setPattern(e.target.value)}
           placeholder="Компания или ключевое слово..."
-          className="flex-1 min-w-0 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
+          className="flex-1 min-w-0 h-9 px-3 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
           aria-label="Новый паттерн блокировки"
         />
         <select
           value={blockType}
           onChange={(e) => setBlockType(e.target.value as 'company' | 'keyword')}
-          className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
+          className="h-9 px-3 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
           aria-label="Тип блокировки"
         >
           <option value="company">🏢 Компания</option>
@@ -62,21 +62,21 @@ export default function BlocklistPanel({ items, onRefresh }: BlocklistPanelProps
         <button
           onClick={handleAdd}
           disabled={adding || !pattern.trim()}
-          className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50 transition-all cursor-pointer whitespace-nowrap"
+          className="flex items-center gap-1 h-9 px-4 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer whitespace-nowrap"
         >
-          {adding ? '⏳' : '➕'}
+          <Plus className="w-3.5 h-3.5" />
         </button>
       </div>
 
       {items.length === 0 && (
-        <div className="text-center py-6 text-gray-400">
+        <div className="text-center py-6 text-slate-400">
           <p className="text-sm">🚫 Нет записей в блок-листе</p>
         </div>
       )}
 
       {companies.length > 0 && (
         <div>
-          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+          <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
             🏢 Компании · {companies.length}
           </h3>
           <div className="flex flex-wrap gap-2">
@@ -85,10 +85,10 @@ export default function BlocklistPanel({ items, onRefresh }: BlocklistPanelProps
                 <span>{b.pattern}</span>
                 <button
                   onClick={() => handleDelete(b.id)}
-                  className="ml-0.5 hover:text-red-800 dark:hover:text-red-200 cursor-pointer"
+                  className="ml-0.5 hover:text-red-800 dark:hover:text-red-200 cursor-pointer transition-colors"
                   aria-label={`Удалить ${b.pattern}`}
                 >
-                  ✕
+                  <X className="w-3 h-3" />
                 </button>
               </div>
             ))}
@@ -98,7 +98,7 @@ export default function BlocklistPanel({ items, onRefresh }: BlocklistPanelProps
 
       {keywords.length > 0 && (
         <div>
-          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+          <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
             🔑 Ключевые слова · {keywords.length}
           </h3>
           <div className="flex flex-wrap gap-2">
@@ -107,10 +107,10 @@ export default function BlocklistPanel({ items, onRefresh }: BlocklistPanelProps
                 <span>{b.pattern}</span>
                 <button
                   onClick={() => handleDelete(b.id)}
-                  className="ml-0.5 hover:text-amber-800 dark:hover:text-amber-200 cursor-pointer"
+                  className="ml-0.5 hover:text-amber-800 dark:hover:text-amber-200 cursor-pointer transition-colors"
                   aria-label={`Удалить ${b.pattern}`}
                 >
-                  ✕
+                  <X className="w-3 h-3" />
                 </button>
               </div>
             ))}

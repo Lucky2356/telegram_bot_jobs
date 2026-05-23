@@ -343,7 +343,7 @@ class Database:
             )
             return list(result.scalars().all())
 
-    async def get_recent_sent(self, limit: int = 20) -> list[tuple[SentVacancy, Vacancy, User, VacancyFilter | None]]:
+    async def get_recent_sent(self, limit: int = 20, offset: int = 0) -> list[tuple[SentVacancy, Vacancy, User, VacancyFilter | None]]:
         async with self.session_factory() as session:
             stmt = (
                 select(SentVacancy, Vacancy, User, VacancyFilter)
@@ -351,6 +351,7 @@ class Database:
                 .join(User, SentVacancy.user_id == User.id)
                 .outerjoin(VacancyFilter, SentVacancy.filter_id == VacancyFilter.id)
                 .order_by(SentVacancy.sent_at.desc())
+                .offset(offset)
                 .limit(limit)
             )
             result = await session.execute(stmt)

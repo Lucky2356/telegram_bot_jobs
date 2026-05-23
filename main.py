@@ -32,7 +32,8 @@ async def main():
         from alembic.config import Config
         from alembic import command
         alembic_cfg = Config("alembic.ini")
-        alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+        sync_url = settings.DATABASE_URL.replace("+aiosqlite", "+pysqlite")
+        alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
         command.upgrade(alembic_cfg, "head")
         logger.info("Database migrations applied")
     except Exception as e:
@@ -69,10 +70,14 @@ async def main():
 
     logger.info("Starting Telegram bot polling...")
     try:
-        await asyncio.gather(
+        results = await asyncio.gather(
             dp.start_polling(bot),
             run_web(db, scheduler_obj),
+            return_exceptions=True,
         )
+        for r in results:
+            if isinstance(r, Exception):
+                logger.warning("Task failed (non-fatal): %s", r)
     finally:
         logger.info("Shutting down...")
         await scheduler_obj.close()

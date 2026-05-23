@@ -17,9 +17,9 @@ type SortKey = 'date-desc' | 'date-asc' | 'salary-desc' | 'salary-asc'
 
 function SkeletonGrid() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="bg-white/80 dark:bg-slate-800/80 rounded-2xl border border-slate-200/60 dark:border-slate-700/40 p-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
           <div className="flex gap-2 mb-3">
             <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-lg flex-1 animate-skeleton" />
             <div className="w-16 h-5 bg-slate-200 dark:bg-slate-700 rounded-lg animate-skeleton" />
@@ -95,16 +95,15 @@ export default function ResultsPanel({
 
   return (
     <div>
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             {selectedFilter
-              ? <><span className="text-primary">{selectedFilter.name}</span> — {processed.length}</>
+              ? <><span className="text-blue-600 dark:text-blue-400">{selectedFilter.name}</span> — {processed.length}</>
               : <>{processed.length} {processed.length === 1 ? 'вакансия' : processed.length < 5 ? 'вакансии' : 'вакансий'}</>}
           </h2>
           {checking && (
-            <span className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium bg-amber-50/70 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-full border border-amber-200/60 dark:border-amber-800/40">
+            <span className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-full border border-amber-200 dark:border-amber-800">
               <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
               Поиск...
             </span>
@@ -115,21 +114,20 @@ export default function ResultsPanel({
         )}
       </div>
 
-      {/* Search + Filters */}
       <div className="flex flex-wrap gap-2 mb-4">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="🔍 Поиск среди результатов..."
-          className="flex-1 min-w-[160px] px-3 py-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-xl bg-white/70 dark:bg-slate-800/70 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+          className="flex-1 min-w-[160px] h-9 px-3 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
           aria-label="Поиск"
         />
         {sources.length > 1 && (
           <select
             value={sourceFilter}
             onChange={(e) => setSourceFilter(e.target.value)}
-            className="px-3 py-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-xl bg-white/70 dark:bg-slate-800/70 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+            className="h-9 px-3 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
             aria-label="Фильтр по сайту"
           >
             <option value="">Все сайты</option>
@@ -139,7 +137,7 @@ export default function ResultsPanel({
         <select
           value={sortKey}
           onChange={(e) => setSortKey(e.target.value as SortKey)}
-          className="px-3 py-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-xl bg-white/70 dark:bg-slate-800/70 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+          className="h-9 px-3 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
           aria-label="Сортировка"
         >
           <option value="date-desc">📅 Сначала новые</option>
@@ -149,10 +147,10 @@ export default function ResultsPanel({
         </select>
         <button
           onClick={() => setGroupBy(!groupBy)}
-          className={`px-3 py-2 text-xs rounded-xl border transition-all cursor-pointer ${
+          className={`h-9 px-3 text-xs rounded-lg border transition-all cursor-pointer ${
             groupBy
-              ? 'bg-primary text-white border-primary'
-              : 'border-slate-200/60 dark:border-slate-700/40 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+              ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-950 dark:border-white'
+              : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
           aria-label="Группировать"
         >
@@ -160,17 +158,15 @@ export default function ResultsPanel({
         </button>
         <button
           onClick={onRefreshResults}
-          className="px-3 py-2 text-xs rounded-xl border border-slate-200/60 dark:border-slate-700/40 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+          className="h-9 px-3 text-xs rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
           aria-label="Обновить"
         >
           🔄
         </button>
       </div>
 
-      {/* Loading skeleton */}
       {results.length === 0 && checking && <SkeletonGrid />}
 
-      {/* Empty */}
       {results.length === 0 && !checking && (
         <div className="text-center py-16 text-slate-400">
           <p className="text-base mb-1">🔍 Ничего не найдено</p>
@@ -178,14 +174,12 @@ export default function ResultsPanel({
         </div>
       )}
 
-      {/* No matches after filter */}
       {results.length > 0 && processed.length === 0 && !checking && (
         <div className="text-center py-8 text-slate-400">
           <p className="text-sm">Ничего не найдено по вашему запросу</p>
         </div>
       )}
 
-      {/* Results */}
       {processed.length > 0 && (
         <>
           {groups ? (
@@ -196,9 +190,9 @@ export default function ResultsPanel({
                     <span>{site}</span>
                     <span className="text-slate-300 dark:text-slate-600 font-normal">{siteItems.length}</span>
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                     {siteItems.map((v, idx) => (
-                      <div key={`${v.source}-${v.url}-${idx}`} className="animate-fade-in" style={{ animationDelay: `${idx * 20}ms` }}>
+                      <div key={`${v.source}-${v.url}`} className="animate-fade-in" style={{ animationDelay: `${idx * 20}ms` }}>
                         <VacancyCard vacancy={v} config={config} onDetail={setDetailVacancy} />
                       </div>
                     ))}
@@ -207,9 +201,9 @@ export default function ResultsPanel({
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {processed.map((v, idx) => (
-                <div key={`${v.source}-${v.url}-${idx}`} className="animate-fade-in" style={{ animationDelay: `${idx * 15}ms` }}>
+                <div key={`${v.source}-${v.url}`} className="animate-fade-in" style={{ animationDelay: `${idx * 15}ms` }}>
                   <VacancyCard vacancy={v} config={config} onDetail={setDetailVacancy} />
                 </div>
               ))}

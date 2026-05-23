@@ -54,6 +54,7 @@ async def on_vacancy_similar(callback: CallbackQuery, state: FSMContext, db: Dat
     keywords = [w for w in words if len(w) > 2][:5]
 
     await state.update_data(
+        filter_name=", ".join(keywords),
         selected_keywords=keywords,
         excluded_keywords=[],
         city=None,

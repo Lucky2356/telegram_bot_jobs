@@ -10,10 +10,6 @@ RUN npm run build
 FROM python:3.12-slim
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -22,6 +18,8 @@ COPY scrapers/ scrapers/
 COPY bot/ bot/
 COPY web/ web/
 COPY main.py .
+COPY alembic.ini .
+COPY alembic/ alembic/
 
 COPY --from=frontend-builder /app/web/frontend/dist /app/web/frontend/dist
 

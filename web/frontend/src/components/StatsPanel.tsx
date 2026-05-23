@@ -37,7 +37,7 @@ export default function StatsPanel({ stats }: StatsPanelProps) {
       {
         label: 'Вакансий',
         data: Object.values(stats.sent_by_source),
-        backgroundColor: ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'],
+        backgroundColor: ['#2563eb', '#06b6d4', '#10b981', '#d97706', '#e11d48'],
       },
     ],
   }), [stats.sent_by_source])
@@ -51,7 +51,7 @@ export default function StatsPanel({ stats }: StatsPanelProps) {
       {
         label: 'Вакансий в день',
         data: stats.sent_by_day.map((d) => d.count),
-        backgroundColor: '#4f46e5',
+        backgroundColor: '#2563eb',
         borderRadius: 4,
       },
     ],
@@ -59,7 +59,6 @@ export default function StatsPanel({ stats }: StatsPanelProps) {
 
   return (
     <div className="space-y-6">
-      {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <StatCard label="Всего фильтров" value={stats.total_filters} />
         <StatCard label="Активных" value={stats.active_filters} />
@@ -68,34 +67,32 @@ export default function StatsPanel({ stats }: StatsPanelProps) {
         <StatCard label="За 30 дней" value={stats.sent_last_30d} />
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 uppercase">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-800">
+          <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wider">
             По дням
           </h3>
           {stats.sent_by_day.length > 0 ? (
             <Bar data={dayData} options={chartOptions} />
           ) : (
-            <p className="text-center text-gray-400 py-8">Нет данных за последние 30 дней</p>
+            <p className="text-center text-slate-400 py-8">Нет данных за последние 30 дней</p>
           )}
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 uppercase">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-800">
+          <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wider">
             По сайтам
           </h3>
           {Object.keys(stats.sent_by_source).length > 0 ? (
             <Pie data={siteData} options={chartOptions} />
           ) : (
-            <p className="text-center text-gray-400 py-8">Нет данных</p>
+            <p className="text-center text-slate-400 py-8">Нет данных</p>
           )}
         </div>
       </div>
 
-      {/* Total sent */}
       <div className="text-center py-6">
-        <p className="text-4xl font-bold text-primary">{stats.total_sent}</p>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Всего отправлено вакансий</p>
+        <p className="text-4xl font-bold text-blue-600 dark:text-blue-400">{stats.total_sent}</p>
+        <p className="text-sm text-slate-400 mt-1">Всего отправлено вакансий</p>
       </div>
     </div>
   )
@@ -103,9 +100,9 @@ export default function StatsPanel({ stats }: StatsPanelProps) {
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 text-center shadow-sm border border-gray-200 dark:border-gray-700">
-      <p className="text-xl font-bold text-primary">{value}</p>
-      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{label}</p>
+    <div className="bg-white dark:bg-slate-900 rounded-xl p-4 text-center shadow-sm border border-slate-200 dark:border-slate-800">
+      <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{value}</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{label}</p>
     </div>
   )
 }

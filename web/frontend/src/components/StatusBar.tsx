@@ -13,10 +13,10 @@ export default function StatusBar({ status }: StatusBarProps) {
   if (!status) return null
 
   return (
-    <div className="flex items-center gap-3 px-1 mb-3 flex-wrap">
+    <div className="flex items-center gap-2 flex-wrap">
       {Object.entries(status).map(([key, ok]) => (
-        <span key={key} className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
-          <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-emerald-400' : 'bg-gray-300 dark:bg-gray-600'}`} />
+        <span key={key} className="flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500">
+          <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
           {labels[key] || key}
         </span>
       ))}

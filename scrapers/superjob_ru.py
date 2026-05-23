@@ -3,6 +3,7 @@ from datetime import datetime
 from scrapers.base import BaseScraper, VacancyData
 from core.config import settings
 from bot.keyboards import CITIES
+from utils.text_cleaner import clean_html
 
 
 SJ_API = "https://api.superjob.ru/2.0/vacancies/"
@@ -81,7 +82,7 @@ class SuperJobScraper(BaseScraper):
                     company=item.get("firm_name") or (item.get("firm", {}).get("title") if item.get("firm") else None),
                     salary_text=salary_text, salary_min=payment_from, salary_max=payment_to,
                     employment_type=emp_type, experience=exp, city=city_name,
-                    description=item.get("candidat"), url=item.get("link", ""), published_at=published,
+                    description=clean_html(item.get("candidat", "")), url=item.get("link", ""), published_at=published,
                 ))
 
         return results

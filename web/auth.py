@@ -5,7 +5,26 @@ import json
 import time
 import secrets
 
-SECRET = secrets.token_hex(32)
+import os
+
+_SECRET_FILE = ".jwt_secret"
+
+def _load_secret() -> str:
+    if env := os.environ.get("JWT_SECRET"):
+        return env
+    try:
+        with open(_SECRET_FILE) as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        secret = secrets.token_hex(32)
+        try:
+            with open(_SECRET_FILE, "w") as f:
+                f.write(secret)
+        except OSError:
+            pass
+        return secret
+
+SECRET = _load_secret()
 TOKEN_TTL = 86400  # 24 hours
 
 

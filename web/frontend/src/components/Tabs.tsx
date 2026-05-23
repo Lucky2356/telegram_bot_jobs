@@ -1,3 +1,12 @@
+import { Search, History, Bookmark, BarChart3 } from 'lucide-react'
+
+const iconMap: Record<string, React.ReactNode> = {
+  search: <Search className="w-4 h-4" />,
+  history: <History className="w-4 h-4" />,
+  saved: <Bookmark className="w-4 h-4" />,
+  stats: <BarChart3 className="w-4 h-4" />,
+}
+
 interface TabsProps {
   tabs: { key: string; label: string }[]
   active: string
@@ -10,25 +19,56 @@ export default function Tabs({ tabs, active, onTabChange }: TabsProps) {
   }
 
   return (
-    <div className="flex gap-6 border-b border-slate-200 dark:border-slate-700/50 mb-5" role="tablist">
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          role="tab"
-          aria-selected={active === tab.key}
-          aria-label={tab.label}
-          tabIndex={0}
-          onClick={() => onTabChange(tab.key)}
-          onKeyDown={handleKeyDown(tab.key)}
-          className={`pb-2.5 text-sm font-medium border-b-2 transition-all cursor-pointer ${
-            active === tab.key
-              ? 'border-primary text-primary dark:border-primary dark:text-primary'
-              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-600'
-          }`}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
+    <>
+      {/* Desktop sidebar */}
+      <nav className="hidden md:flex flex-col gap-1 w-56 shrink-0" role="tablist">
+        {tabs.map((tab) => {
+          const isActive = active === tab.key
+          return (
+            <button
+              key={tab.key}
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={0}
+              onClick={() => onTabChange(tab.key)}
+              onKeyDown={handleKeyDown(tab.key)}
+              className={`flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300'
+              }`}
+            >
+              {iconMap[tab.key] || null}
+              <span>{tab.label}</span>
+            </button>
+          )
+        })}
+      </nav>
+
+      {/* Mobile horizontal tabs */}
+      <div className="flex md:hidden gap-1 overflow-x-auto pb-1" role="tablist">
+        {tabs.map((tab) => {
+          const isActive = active === tab.key
+          return (
+            <button
+              key={tab.key}
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={0}
+              onClick={() => onTabChange(tab.key)}
+              onKeyDown={handleKeyDown(tab.key)}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950'
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              {iconMap[tab.key] || null}
+              <span>{tab.label}</span>
+            </button>
+          )
+        })}
+      </div>
+    </>
   )
 }

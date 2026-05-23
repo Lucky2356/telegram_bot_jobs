@@ -15,10 +15,10 @@ import Toast, { toast } from './components/Toast'
 import LoginPage from './components/LoginPage'
 
 const TABS = [
-  { key: 'search', label: '🔍 Поиск' },
-  { key: 'history', label: '📨 История' },
-  { key: 'saved', label: '📁 Избранное' },
-  { key: 'stats', label: '📊 Статистика' },
+  { key: 'search', label: 'Поиск' },
+  { key: 'history', label: 'История' },
+  { key: 'saved', label: 'Избранное' },
+  { key: 'stats', label: 'Статистика' },
 ]
 
 const loadingSpinner = (
@@ -30,7 +30,39 @@ const loadingSpinner = (
 
 export default function App() {
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem('auth_token'))
-  const [authLoading, setAuthLoading] = useState(!token)
+
+  const handleLogin = (newToken: string) => {
+    sessionStorage.setItem('auth_token', newToken)
+    setToken(newToken)
+  }
+
+  // Auto-login для backward compat (без WEB_PASSWORD)
+  useEffect(() => {
+    if (!token) {
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: '' }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.ok && data.token) {
+            sessionStorage.setItem('auth_token', data.token)
+            setToken(data.token)
+          }
+        })
+        .catch(() => {})
+    }
+  }, [])
+
+  if (!token) {
+    return <LoginPage onLogin={handleLogin} />
+  }
+
+  return <AuthenticatedApp />
+}
+
+function AuthenticatedApp() {
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [status, setStatus] = useState<ParserStatus | null>(null)
   const [filters, setFilters] = useState<VacancyFilter[]>([])
@@ -50,51 +82,13 @@ export default function App() {
     } catch { /* ignore */ }
     return window.matchMedia('(prefers-color-scheme: dark)').matches
   })
+  const [checkingNow, setCheckingNow] = useState(false)
+  const [currentFilter, setCurrentFilter] = useState<string | null>(null)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
     try { localStorage.setItem('theme', dark ? 'dark' : 'light') } catch { /* ignore */ }
   }, [dark])
-
-  const handleLogin = (newToken: string) => {
-    sessionStorage.setItem('auth_token', newToken)
-    setToken(newToken)
-    setAuthLoading(false)
-  }
-
-  // Если пароль не установлен — получаем токен без логина
-  useEffect(() => {
-    if (!token) {
-      fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: '' }),
-      })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.ok && data.token) {
-            sessionStorage.setItem('auth_token', data.token)
-            setToken(data.token)
-          }
-          setAuthLoading(false)
-        })
-        .catch(() => setAuthLoading(false))
-    }
-  }, [])
-
-  if (!token && !authLoading) {
-    return <LoginPage onLogin={handleLogin} />
-  }
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent" />
-      </div>
-    )
-  }
-
-  const toggleTheme = () => setDark((prev) => !prev)
 
   const fetchConfig = useCallback(async () => {
     try { setConfig(await api.getConfig()) } catch { /* ignore */ }
@@ -137,9 +131,6 @@ export default function App() {
     else if (activeTab === 'stats') fetchStats()
   }, [activeTab, fetchFilters, fetchResults, fetchSaved, fetchBlocklist, fetchStats])
 
-  const [checkingNow, setCheckingNow] = useState(false)
-  const [currentFilter, setCurrentFilter] = useState<string | null>(null)
-
   // SSE для real-time обновлений
   useEffect(() => {
     const es = new EventSource('/api/events')
@@ -170,6 +161,8 @@ export default function App() {
     return () => es.close()
   }, [fetchResults])
 
+  const toggleTheme = () => setDark((prev) => !prev)
+
   const handleCheckNow = async () => {
     setCheckingNow(true)
     try {
@@ -187,107 +180,133 @@ export default function App() {
   const handleCloseFilter = useCallback(() => setCreateOpen(false), [])
   const handleSavedFilter = useCallback(() => { handleRefresh(); fetchResults() }, [handleRefresh, fetchResults])
 
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* Sticky glass header */}
-      <div className="sticky top-0 z-30 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border-b border-slate-200/60 dark:border-slate-700/40">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-3">
-              <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-                🔍 Job Bot
-              </h1>
-              <StatusBar status={status} />
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { setCreateOpen(true); setSelectedFilterId(null) }}
-                className="px-3.5 py-2 text-xs font-medium bg-primary/10 text-primary rounded-xl hover:bg-primary hover:text-white transition-all cursor-pointer"
-              >
-                ➕ Фильтр
-              </button>
-              <button
-                onClick={toggleTheme}
-                className="px-3 py-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-slate-500 dark:text-slate-400"
-                aria-label={dark ? 'Светлая тема' : 'Тёмная тема'}
-              >
-                {dark ? '☀️' : '🌙'}
-              </button>
-            </div>
-          </div>
+  const pageTitle = TABS.find((t) => t.key === activeTab)?.label || ''
 
-          {/* Tabs */}
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex">
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex flex-col w-56 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800">
+          <h1 className="text-lg font-bold text-slate-950 dark:text-white tracking-tight">Job Bot</h1>
+        </div>
+        <div className="flex-1 p-3">
           <Tabs tabs={TABS} active={activeTab} onTabChange={setActiveTab} />
         </div>
-      </div>
+        <div className="p-3 border-t border-slate-200 dark:border-slate-800">
+          <StatusBar status={status} />
+          <button
+            onClick={toggleTheme}
+            className="mt-2 w-full px-3 py-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer flex items-center gap-2"
+            aria-label={dark ? 'Светлая тема' : 'Тёмная тема'}
+          >
+            {dark ? '☀️' : '🌙'} {dark ? 'Светлая' : 'Тёмная'}
+          </button>
+        </div>
+      </aside>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-5">
-        {activeTab === 'search' && config && (
-          <ErrorBoundary>
-            <div className="space-y-4">
-              <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 p-4">
-                <FiltersPanel filters={filters} config={config} selectedId={selectedFilterId} onSelect={setSelectedFilterId} onRefresh={handleRefresh} />
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top header */}
+        <header className="sticky top-0 z-30 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 md:px-6 py-3 flex items-center justify-between gap-3">
+          {/* Mobile: sidebar toggle + title */}
+          <div className="flex items-center gap-3 md:hidden">
+            <h1 className="text-base font-bold text-slate-950 dark:text-white tracking-tight">Job Bot</h1>
+            <StatusBar status={status} />
+          </div>
+          <div className="hidden md:flex items-center gap-3">
+            <h2 className="text-lg font-semibold text-slate-950 dark:text-white tracking-tight">{pageTitle}</h2>
+            <StatusBar status={status} />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setCreateOpen(true); setSelectedFilterId(null) }}
+              className="px-3.5 py-2 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-[0.98] transition-all cursor-pointer"
+            >
+              ➕ Фильтр
+            </button>
+            <button
+              onClick={toggleTheme}
+              className="md:hidden px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-slate-500 dark:text-slate-400 transition-colors"
+              aria-label={dark ? 'Светлая тема' : 'Тёмная тема'}
+            >
+              {dark ? '☀️' : '🌙'}
+            </button>
+          </div>
+        </header>
+
+        {/* Mobile tabs */}
+        <div className="md:hidden px-4 pt-3 pb-1 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800">
+          <Tabs tabs={TABS} active={activeTab} onTabChange={setActiveTab} />
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 px-4 md:px-6 py-5">
+          {activeTab === 'search' && config && (
+            <ErrorBoundary>
+              <div className="space-y-4">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
+                  <FiltersPanel filters={filters} config={config} selectedId={selectedFilterId} onSelect={setSelectedFilterId} onRefresh={handleRefresh} />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCheckNow}
+                    disabled={checkingNow}
+                    className="px-5 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm"
+                  >
+                    {checkingNow || checking ? (currentFilter ? `⏳ ${currentFilter}` : '⏳ Проверка...') : '🔍 Проверить сейчас'}
+                  </button>
+                  <button
+                    onClick={fetchResults}
+                    className="px-4 py-2.5 text-sm border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-slate-500 dark:text-slate-400 transition-colors"
+                  >
+                    🔄 Обновить
+                  </button>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
+                  <ResultsPanel
+                    results={results} config={config} checkedAt={checkedAt} checking={checking}
+                    filters={filters} selectedFilterId={selectedFilterId} onRefreshResults={fetchResults}
+                  />
+                </div>
               </div>
+            </ErrorBoundary>
+          )}
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleCheckNow}
-                  disabled={checkingNow}
-                  className="px-5 py-2.5 text-sm font-medium bg-primary text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 transition-all cursor-pointer shadow-sm"
-                >
-                  {checkingNow || checking ? (currentFilter ? `⏳ ${currentFilter}` : '⏳ Проверка...') : '🔍 Проверить сейчас'}
-                </button>
-                <button
-                  onClick={fetchResults}
-                  className="px-4 py-2.5 text-sm border border-slate-200/60 dark:border-slate-700/40 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-slate-600 dark:text-slate-400"
-                >
-                  🔄 Обновить
-                </button>
+          {activeTab === 'history' && config && (
+            <ErrorBoundary>
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
+                <HistoryPanel config={config} />
               </div>
+            </ErrorBoundary>
+          )}
 
-              <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 p-4">
-                <ResultsPanel
-                  results={results} config={config} checkedAt={checkedAt} checking={checking}
-                  filters={filters} selectedFilterId={selectedFilterId} onRefreshResults={fetchResults}
-                />
+          {activeTab === 'saved' && config && (
+            <ErrorBoundary>
+              <div className="space-y-4">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">📌 Сохранённые вакансии</h2>
+                  <SavedPanel saved={saved} config={config} onRefresh={fetchSaved} />
+                </div>
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
+                  <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">🚫 Блок-лист</h2>
+                  <BlocklistPanel items={blocklist} onRefresh={fetchBlocklist} />
+                </div>
               </div>
-            </div>
-          </ErrorBoundary>
-        )}
+            </ErrorBoundary>
+          )}
 
-        {activeTab === 'history' && config && (
-          <ErrorBoundary>
-            <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 p-4">
-              <HistoryPanel config={config} />
-            </div>
-          </ErrorBoundary>
-        )}
+          {activeTab === 'stats' && stats && (
+            <ErrorBoundary>
+              <Suspense fallback={<div className="text-center py-20 text-slate-400"><p className="text-sm">Загрузка графиков...</p></div>}>
+                <StatsPanel stats={stats} />
+              </Suspense>
+            </ErrorBoundary>
+          )}
 
-        {activeTab === 'saved' && config && (
-          <ErrorBoundary>
-            <div className="space-y-4">
-              <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 p-4">
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">📌 Сохранённые вакансии</h2>
-                <SavedPanel saved={saved} config={config} onRefresh={fetchSaved} />
-              </div>
-              <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 p-4">
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">🚫 Блок-лист</h2>
-                <BlocklistPanel items={blocklist} onRefresh={fetchBlocklist} />
-              </div>
-            </div>
-          </ErrorBoundary>
-        )}
-
-        {activeTab === 'stats' && stats && (
-          <ErrorBoundary>
-            <Suspense fallback={<div className="text-center py-20 text-slate-400"><p className="text-sm">Загрузка графиков...</p></div>}>
-              <StatsPanel stats={stats} />
-            </Suspense>
-          </ErrorBoundary>
-        )}
-
-        {!config && loadingSpinner}
+          {!config && loadingSpinner}
+        </div>
       </div>
 
       {createOpen && config && (

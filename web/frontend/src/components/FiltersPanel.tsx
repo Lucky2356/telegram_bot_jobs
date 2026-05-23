@@ -54,7 +54,7 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
 
   if (filters.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+      <div className="text-center py-8 text-slate-400 dark:text-slate-500">
         <p className="text-sm">Фильтров пока нет</p>
       </div>
     )
@@ -68,7 +68,7 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="🔍 Поиск фильтров..."
-          className="w-full mb-2 px-3 py-2 text-xs border border-slate-200/60 dark:border-slate-700/40 rounded-xl bg-white/70 dark:bg-slate-800/70 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+          className="w-full mb-2 h-9 px-3 text-xs border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
           aria-label="Поиск фильтров"
         />
       )}
@@ -77,8 +77,8 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
           onClick={() => onSelect(null)}
           className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
             selectedId === null
-              ? 'bg-primary text-white border-primary shadow-sm'
-              : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:border-primary'
+              ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-950 dark:border-white shadow-sm'
+              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-400'
           }`}
         >
           Все
@@ -88,10 +88,10 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
             key={f.id}
             className={`group relative flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
               selectedId === f.id
-                ? 'bg-primary text-white border-primary shadow-sm'
+                ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-950 dark:border-white shadow-sm'
                 : f.active
-                  ? 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-primary'
-                  : 'bg-gray-50 dark:bg-gray-800/50 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-700'
+                  ? 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400'
+                  : 'bg-slate-50 dark:bg-slate-800/30 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700'
             }`}
             onClick={() => onSelect(f.id)}
             role="tab"
@@ -99,16 +99,15 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(f.id) }}}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${f.active ? 'bg-emerald-400' : 'bg-gray-300 dark:bg-gray-600'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${f.active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
             <span className={!f.active ? 'line-through' : ''}>{f.name}</span>
 
-            {/* Quick actions */}
             <div className="hidden group-hover:flex items-center gap-0.5 ml-1">
               {f.active && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleCheckOne(f.id) }}
                   disabled={checkingId === f.id}
-                  className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-gray-700 text-gray-500 hover:text-emerald-500 cursor-pointer shadow-sm border border-gray-200 dark:border-gray-600"
+                  className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-emerald-500 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
                   aria-label={`Проверить фильтр ${f.name}`}
                 >
                   {checkingId === f.id ? '⏳' : '▶'}
@@ -116,28 +115,28 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
               )}
               <button
                 onClick={(e) => { e.stopPropagation(); handleToggle(f.id) }}
-                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-gray-700 text-gray-500 hover:text-primary cursor-pointer shadow-sm border border-gray-200 dark:border-gray-600"
+                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-blue-600 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
                 aria-label={f.active ? 'Выключить' : 'Включить'}
               >
                 {f.active ? '⏸' : '▶️'}
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleClone(f.id) }}
-                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-gray-700 text-gray-500 hover:text-primary cursor-pointer shadow-sm border border-gray-200 dark:border-gray-600"
+                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-blue-600 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
                 aria-label="Клонировать"
               >
                 📋
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setEditFilter(f) }}
-                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-gray-700 text-gray-500 hover:text-primary cursor-pointer shadow-sm border border-gray-200 dark:border-gray-600"
+                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-blue-600 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
                 aria-label="Редактировать"
               >
                 ✏️
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setDeleteConfirm(f.id) }}
-                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-gray-700 text-gray-500 hover:text-red-500 cursor-pointer shadow-sm border border-gray-200 dark:border-gray-600"
+                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-red-500 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
                 aria-label="Удалить"
               >
                 🗑

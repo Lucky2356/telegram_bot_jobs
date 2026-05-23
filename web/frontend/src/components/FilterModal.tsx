@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { AppConfig, FilterFormData, VacancyFilter } from '../types'
 import { api } from '../api'
 import { toast } from './Toast'
+import { X } from 'lucide-react'
 
 interface FilterModalProps {
   config: AppConfig
@@ -96,46 +97,43 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/50 p-4"
       role="dialog"
       aria-label={isEdit ? 'Редактировать фильтр' : 'Создать фильтр'}
       aria-modal="true"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-lg rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-slate-200/60 dark:border-slate-700/40">
-        {/* Header */}
-        <div className="sticky top-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm z-10 flex items-center justify-between px-6 pt-5 pb-3 border-b border-slate-100 dark:border-slate-700/40">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-800">
+        <div className="sticky top-0 bg-white dark:bg-slate-900 z-10 flex items-center justify-between px-6 pt-5 pb-3 border-b border-slate-200 dark:border-slate-800">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
             {isEdit ? '✏️ Редактировать фильтр' : '➕ Создать фильтр'}
           </h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
             aria-label="Закрыть"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="px-6 py-4 space-y-4">
-          {/* Name */}
           <div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">📛 Название</label>
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Название</label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-              className="w-full px-3.5 py-2.5 text-sm border border-slate-200/60 dark:border-slate-700/40 rounded-xl bg-slate-50/70 dark:bg-slate-900/70 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              className="w-full h-10 px-3.5 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
               placeholder="Мой фильтр"
             />
           </div>
 
-          {/* Keywords */}
-          <div className="bg-slate-50/70 dark:bg-slate-900/70 rounded-xl p-4 border border-slate-200/60 dark:border-slate-700/40">
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
             <button onClick={() => setKwCollapsed(!kwCollapsed)} className="flex items-center justify-between w-full text-left cursor-pointer">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                🔑 Ключевые слова
-                <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-primary/10 text-primary font-medium">{form.keywords.length}</span>
+                Ключевые слова
+                <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium">{form.keywords.length}</span>
               </span>
               <span className="text-slate-400 text-sm">{kwCollapsed ? '▶' : '▼'}</span>
             </button>
@@ -145,7 +143,7 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
                 {form.keywords.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {form.keywords.map((kw) => (
-                      <span key={kw} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary text-white">
+                      <span key={kw} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-600 text-white">
                         {kw}
                         <button onClick={() => toggleKeyword(kw)} className="ml-0.5 hover:text-white/70 cursor-pointer" aria-label={`Убрать ${kw}`}>✕</button>
                       </span>
@@ -170,8 +168,8 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
                               onClick={() => toggleKeyword(kw)}
                               className={`px-2.5 py-1 text-xs rounded-lg border transition-all cursor-pointer ${
                                 sel
-                                  ? 'bg-primary text-white border-primary shadow-sm'
-                                  : 'bg-white/70 dark:bg-slate-800/70 border-slate-200/60 dark:border-slate-700/40 text-slate-700 dark:text-slate-300 hover:border-primary hover:text-primary'
+                                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-500 hover:text-blue-600'
                               }`}
                               aria-label={sel ? `Убрать ${kw}` : `Добавить ${kw}`}
                             >
@@ -187,13 +185,12 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
             )}
           </div>
 
-          {/* Exclude keywords */}
-          <div className="bg-slate-50/70 dark:bg-slate-900/70 rounded-xl p-4 border border-slate-200/60 dark:border-slate-700/40">
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
             <button onClick={() => setExCollapsed(!exCollapsed)} className="flex items-center justify-between w-full text-left cursor-pointer">
               <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                🚫 Исключить
+                Исключить
                 {form.exclude_keywords.length > 0 && (
-                  <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-red-100/70 dark:bg-red-900/30 text-red-500 font-medium">{form.exclude_keywords.length}</span>
+                  <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-red-100 dark:bg-red-900/30 text-red-500 font-medium">{form.exclude_keywords.length}</span>
                 )}
               </span>
               <span className="text-slate-400 text-sm">{exCollapsed ? '▶' : '▼'}</span>
@@ -204,7 +201,7 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
                 {form.exclude_keywords.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {form.exclude_keywords.map((kw) => (
-                      <span key={kw} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-red-500 text-white">
+                      <span key={kw} className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg bg-red-600 text-white">
                         {kw}
                         <button onClick={() => toggleExclude(kw)} className="ml-0.5 hover:text-white/70 cursor-pointer" aria-label={`Не исключать ${kw}`}>✕</button>
                       </span>
@@ -220,8 +217,8 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
                         onClick={() => toggleExclude(kw)}
                         className={`px-2.5 py-1 text-xs rounded-lg border transition-all cursor-pointer mr-1 mb-1 ${
                           sel
-                            ? 'bg-red-500 text-white border-red-500 shadow-sm'
-                            : 'bg-white/70 dark:bg-slate-800/70 border-slate-200/60 dark:border-slate-700/40 text-slate-700 dark:text-slate-300 hover:border-red-400 hover:text-red-500'
+                            ? 'bg-red-600 text-white border-red-600 shadow-sm'
+                            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-red-500 hover:text-red-500'
                         }`}
                         aria-label={sel ? `Не исключать ${kw}` : `Исключить ${kw}`}
                       >
@@ -234,14 +231,13 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
             )}
           </div>
 
-          {/* City + Salary */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="bg-slate-50/70 dark:bg-slate-900/70 rounded-xl p-3.5 border border-slate-200/60 dark:border-slate-700/40">
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700">
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">📍 Город</label>
               <select
                 value={form.city ?? ''}
                 onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value || null }))}
-                className="w-full px-3 py-2 text-sm border border-slate-200/60 dark:border-slate-700/40 rounded-xl bg-white/70 dark:bg-slate-800/70 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full h-10 px-3 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
               >
                 <option value="">🌍 Любой</option>
                 {Object.entries(config.cities).map(([key, label]) => (
@@ -249,21 +245,20 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
                 ))}
               </select>
             </div>
-            <div className="bg-slate-50/70 dark:bg-slate-900/70 rounded-xl p-3.5 border border-slate-200/60 dark:border-slate-700/40">
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700">
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">💰 Зарплата</label>
               <select
                 value={salaryKey}
                 onChange={(e) => handleSalaryChange(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200/60 dark:border-slate-700/40 rounded-xl bg-white/70 dark:bg-slate-800/70 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full h-10 px-3 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
               >
                 {config.salaries.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
               </select>
             </div>
           </div>
 
-          {/* Employment + Experience */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="bg-slate-50/70 dark:bg-slate-900/70 rounded-xl p-3.5 border border-slate-200/60 dark:border-slate-700/40">
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700">
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">👔 Тип занятости</label>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(config.employment_types).map(([key, label]) => {
@@ -274,8 +269,8 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
                       onClick={() => toggleEmployment(key)}
                       className={`px-2.5 py-1 text-xs rounded-lg border transition-all cursor-pointer ${
                         sel
-                          ? 'bg-primary text-white border-primary shadow-sm'
-                          : 'bg-white/70 dark:bg-slate-800/70 border-slate-200/60 dark:border-slate-700/40 text-slate-700 dark:text-slate-300 hover:border-primary'
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-500'
                       }`}
                     >
                       {label}
@@ -284,12 +279,12 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
                 })}
               </div>
             </div>
-            <div className="bg-slate-50/70 dark:bg-slate-900/70 rounded-xl p-3.5 border border-slate-200/60 dark:border-slate-700/40">
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700">
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">💼 Опыт</label>
               <select
                 value={form.experience ?? ''}
                 onChange={(e) => setForm((prev) => ({ ...prev, experience: e.target.value || null }))}
-                className="w-full px-3 py-2 text-sm border border-slate-200/60 dark:border-slate-700/40 rounded-xl bg-white/70 dark:bg-slate-800/70 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full h-10 px-3 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
               >
                 <option value="">Любой</option>
                 {Object.entries(config.experiences).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
@@ -297,11 +292,10 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
             </div>
           </div>
 
-          {/* Sites */}
-          <div className="bg-slate-50/70 dark:bg-slate-900/70 rounded-xl p-3.5 border border-slate-200/60 dark:border-slate-700/40">
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3.5 border border-slate-200 dark:border-slate-700">
             <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
               🌐 Сайты
-              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-primary/10 text-primary font-medium">{form.sites.length}</span>
+              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium">{form.sites.length}</span>
             </label>
             <div className="flex flex-wrap gap-1.5">
               {Object.entries(config.sites).map(([key, label]) => {
@@ -312,8 +306,8 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
                     onClick={() => toggleSite(key)}
                     className={`px-3 py-1.5 text-sm rounded-lg border transition-all cursor-pointer ${
                       sel
-                        ? 'bg-primary text-white border-primary shadow-sm'
-                        : 'bg-white/70 dark:bg-slate-800/70 border-slate-200/60 dark:border-slate-700/40 text-slate-700 dark:text-slate-300 hover:border-primary'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-500'
                     }`}
                   >
                     {label}
@@ -324,15 +318,14 @@ export default function FilterModal({ config, filter, onClose, onSaved }: Filter
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="sticky bottom-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 dark:border-slate-700/40">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-all">
+        <div className="sticky bottom-0 bg-white dark:bg-slate-900 flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-800">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors cursor-pointer">
             Отмена
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2 text-sm font-medium bg-primary text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 transition-all cursor-pointer shadow-sm"
+            className="px-5 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-sm"
           >
             {saving ? '⏳ Сохранение...' : isEdit ? '💾 Сохранить' : '✅ Создать фильтр'}
           </button>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { LogIn } from 'lucide-react'
 
 interface LoginPageProps {
   onLogin: (token: string) => void
@@ -35,9 +36,12 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
-      <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-lg rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200/60 dark:border-slate-700/40 p-8">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 w-full max-w-sm p-8">
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">🔍 Job Bot</h1>
+          <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <LogIn className="w-5 h-5 text-white" />
+          </div>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50">Job Bot</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Введите пароль для входа</p>
         </div>
 
@@ -48,7 +52,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Пароль"
             autoFocus
-            className="w-full px-4 py-3 text-sm border border-slate-200/60 dark:border-slate-700/40 rounded-xl bg-slate-50/70 dark:bg-slate-900/70 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+            className="w-full h-10 px-3.5 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
             aria-label="Пароль"
           />
 
@@ -59,9 +63,9 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           <button
             type="submit"
             disabled={loading || !password.trim()}
-            className="w-full py-3 text-sm font-medium bg-primary text-white rounded-xl hover:bg-primary-hover disabled:opacity-50 transition-all cursor-pointer shadow-sm"
+            className="w-full h-10 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
           >
-            {loading ? '⏳ Вход...' : '🚪 Войти'}
+            {loading ? '⏳ Вход...' : 'Войти'}
           </button>
         </form>
       </div>

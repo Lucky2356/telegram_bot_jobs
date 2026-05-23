@@ -10,12 +10,12 @@ interface VacancyCardProps {
   onDetail?: (vacancy: VacancyResult) => void
 }
 
-const sourceStyles: Record<string, { label: string; color: string; stripe: string }> = {
-  hh: { label: 'hh.ru', color: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300', stripe: 'bg-blue-500' },
-  superjob: { color: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300', stripe: 'bg-cyan-500', label: 'SuperJob' },
-  trudvsem: { color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300', stripe: 'bg-emerald-500', label: 'Работа России' },
-  rabota: { color: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300', stripe: 'bg-amber-500', label: 'rabota.ru' },
-  habr: { color: 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300', stripe: 'bg-rose-500', label: 'Хабр Карьера' },
+const sourceStyles: Record<string, { label: string; color: string }> = {
+  hh: { label: 'hh.ru', color: 'bg-blue-600' },
+  superjob: { color: 'bg-cyan-600', label: 'SuperJob' },
+  trudvsem: { color: 'bg-emerald-600', label: 'Работа России' },
+  rabota: { color: 'bg-amber-600', label: 'rabota.ru' },
+  habr: { color: 'bg-rose-600', label: 'Хабр Карьера' },
 }
 
 const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = true, onDetail }: VacancyCardProps) {
@@ -41,7 +41,8 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
       })()
     : null
 
-  const handleSave = async () => {
+  const handleSave = async (e: React.MouseEvent) => {
+    e.stopPropagation()
     if (saving) return
     setSaving(true)
     try {
@@ -54,7 +55,8 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
     }
   }
 
-  const handleBlock = async () => {
+  const handleBlock = async (e: React.MouseEvent) => {
+    e.stopPropagation()
     if (blocking) return
     setBlocking(true)
     try {
@@ -67,81 +69,70 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
     }
   }
 
-  const descTruncated = (vacancy.description?.length ?? 0) > 180
+  const descTruncated = (vacancy.description?.length ?? 0) > 150
   const desc = expanded && vacancy.description ? vacancy.description
     : descTruncated && vacancy.description
-      ? vacancy.description.slice(0, 180).split(' ').slice(0, -1).join(' ') + '...'
+      ? vacancy.description.slice(0, 150).split(' ').slice(0, -1).join(' ') + '...'
       : vacancy.description
+
+  const handleCardClick = () => onDetail?.(vacancy)
 
   return (
     <div
-      onClick={() => onDetail?.(vacancy)}
-      onKeyDown={(e) => { if (e.key === 'Enter') onDetail?.(vacancy) }}
-      className="relative bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-slate-700/40 hover:shadow-md hover:border-slate-300/80 dark:hover:border-slate-600/60 transition-all duration-200 flex flex-col overflow-hidden group cursor-pointer"
+      onClick={handleCardClick}
+      onKeyDown={(e) => { if (e.key === 'Enter') handleCardClick() }}
+      className="relative bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col overflow-hidden group cursor-pointer"
       role="article"
       tabIndex={0}
       aria-label={`Вакансия: ${vacancy.title}`}
     >
-      {/* Accent stripe */}
-      {src && <div className={`absolute top-0 left-0 w-1 h-full ${src.stripe} opacity-40`} />}
+      {src && <div className={`absolute top-0 left-0 w-0.5 h-full ${src.color}`} />}
 
-      <div className="p-4 pl-5 flex flex-col flex-1">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-2 mb-2.5">
+      <div className="p-3.5 pl-4 flex flex-col flex-1">
+        <div className="flex items-start justify-between gap-2 mb-2">
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 leading-snug line-clamp-2 flex-1">
             {vacancy.title}
           </h3>
           <div className="shrink-0 flex flex-col items-end gap-1">
             {vacancy.filter_name && (
-              <span className="px-2 py-0.5 text-[10px] font-medium rounded-lg bg-primary/10 text-primary">
-                📋 {vacancy.filter_name}
+              <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                {vacancy.filter_name}
               </span>
             )}
             {src && (
-              <span className={`px-2.5 py-1 text-[10px] font-semibold rounded-lg ${src.color}`}>
+              <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full text-white ${src.color}`}>
                 {src.label}
               </span>
             )}
           </div>
         </div>
 
-        {/* Company + City + Time */}
-        <div className="flex items-center gap-2.5 text-xs text-slate-500 dark:text-slate-400 mb-2.5 flex-wrap">
-          {vacancy.company && (
-            <span className="flex items-center gap-1.5">
-              <span>🏢</span>
-              <span className="font-medium text-slate-700 dark:text-slate-300">{vacancy.company}</span>
-            </span>
-          )}
-          {vacancy.city && (
-            <span className="flex items-center gap-1.5">📍 {vacancy.city}</span>
-          )}
-          {timeAgo && <span className="flex items-center gap-1.5 ml-auto text-slate-400 dark:text-slate-500">🕐 {timeAgo}</span>}
+        {vacancy.company && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-1.5 font-medium">
+            {vacancy.company}
+          </p>
+        )}
+
+        {vacancy.salary_text && (
+          <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mb-2">
+            {vacancy.salary_text}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 mb-2 flex-wrap">
+          {vacancy.city && <span>📍 {vacancy.city}</span>}
+          {empLabel && <span>👔 {empLabel}</span>}
+          {vacancy.experience && <span>💼 {config.experiences[vacancy.experience] || vacancy.experience}</span>}
+          {timeAgo && <span className="ml-auto">🕐 {timeAgo}</span>}
         </div>
 
-        {/* Salary */}
-        {vacancy.salary_text && (
-          <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 mb-2.5 bg-emerald-50/70 dark:bg-emerald-900/15 px-3 py-1 rounded-lg inline-block">
-            💰 {vacancy.salary_text}
-          </div>
-        )}
-
-        {/* Employment + Experience */}
-        {(empLabel || vacancy.experience) && (
-          <div className="flex flex-wrap gap-1.5 mb-2.5">
-            {empLabel && <span className="px-2.5 py-1 text-[11px] rounded-lg bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400 font-medium">👔 {empLabel}</span>}
-            {vacancy.experience && <span className="px-2.5 py-1 text-[11px] rounded-lg bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-400 font-medium">💼 {config.experiences[vacancy.experience] || vacancy.experience}</span>}
-          </div>
-        )}
-
-        {/* Description */}
         {desc && (
-          <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-2.5">
-            📋 {desc}
+          <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-2">
+            {desc}
             {descTruncated && (
               <button
-                onClick={() => setExpanded(!expanded)}
-                className="ml-1 text-primary hover:underline font-medium cursor-pointer"
+                onClick={(e) => { e.stopPropagation(); setExpanded(!expanded) }}
+                className="ml-1 text-blue-600 dark:text-blue-400 hover:underline font-medium cursor-pointer"
               >
                 {expanded ? 'свернуть' : 'показать ещё'}
               </button>
@@ -151,14 +142,14 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
 
         <div className="flex-1" />
 
-        {/* Actions */}
         {showActions && (
-          <div className="flex items-center gap-2 mt-2 pt-3 border-t border-slate-100 dark:border-slate-700/40">
+          <div className="flex items-center gap-2 mt-2 pt-2.5 border-t border-slate-100 dark:border-slate-800">
             <a
               href={vacancy.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-primary bg-primary/5 border border-primary/20 rounded-xl hover:bg-primary hover:text-white transition-all"
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 dark:hover:text-white transition-colors"
               aria-label={`Открыть ${vacancy.title}`}
             >
               🔗 Открыть
@@ -166,7 +157,7 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700/60 hover:bg-slate-100 dark:hover:bg-slate-700/60 text-slate-500 dark:text-slate-400 transition-all cursor-pointer disabled:opacity-50"
+              className="px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors cursor-pointer disabled:opacity-50"
               aria-label="Сохранить"
             >
               {saving ? '⏳' : '📌'}
@@ -174,7 +165,7 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
             <button
               onClick={handleBlock}
               disabled={blocking}
-              className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700/60 hover:bg-red-50 dark:hover:bg-red-900/10 text-slate-400 hover:text-red-500 transition-all cursor-pointer disabled:opacity-50"
+              className="px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors cursor-pointer disabled:opacity-50"
               aria-label="Не интересует"
             >
               {blocking ? '⏳' : '🚫'}

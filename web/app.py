@@ -13,6 +13,7 @@ from core.database.repository import Database
 from core.scheduler import Scheduler
 from bot.keyboards import EMPLOYMENT_TYPES, SITES, KEYWORDS_BY_GROUP, CITIES, SALARIES, EXPERIENCE
 from web.auth import create_token, verify_token
+from utils.text_cleaner import clean_html
 
 
 REACT_BUILD_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
@@ -286,6 +287,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.get("/api/events")
     async def api_events(request: Request):
+        if not scheduler:
+            return StreamingResponse([], media_type="text/event-stream")
         async def event_generator():
             try:
                 while True:
@@ -408,7 +411,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
                     "id": v.id,
                     "title": v.title, "company": v.company, "salary_text": v.salary_text,
                     "city": v.city, "employment_type": v.employment_type,
-                    "experience": v.experience, "description": v.description,
+                    "experience": v.experience, "description": clean_html(v.description),
                     "url": v.url, "source": v.source,
                     "published_at": v.published_at.isoformat() if v.published_at else None,
                 }
@@ -420,8 +423,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.get("/api/history")
     async def api_history(page: int = 1, limit: int = 20):
-        offset = (page - 1) * limit
-        history = await db.get_recent_sent(limit=limit)
+        offset_val = (page - 1) * limit
+        history = await db.get_recent_sent(limit=limit, offset=offset_val)
         return {
             "items": [
                 {

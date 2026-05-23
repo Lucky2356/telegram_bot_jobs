@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
+import { X, CheckCircle, AlertCircle, Info } from 'lucide-react'
 
 interface ToastData {
   message: string
@@ -15,28 +16,28 @@ export const toast = {
   info: (message: string) => addToastFn?.({ message, type: 'info' }),
 }
 
-const typeStyles: Record<string, string> = {
-  success: 'bg-green-600',
-  error: 'bg-red-600',
-  info: 'bg-gray-800 dark:bg-gray-200 dark:text-gray-900',
+const iconMap: Record<string, React.ReactNode> = {
+  success: <CheckCircle className="w-4 h-4 text-emerald-500" />,
+  error: <AlertCircle className="w-4 h-4 text-red-500" />,
+  info: <Info className="w-4 h-4 text-blue-500" />,
 }
 
 export default function Toast() {
   const [items, setItems] = useState<ToastData[]>([])
 
+  const removeToast = useCallback((id: number) => {
+    setItems((prev) => prev.filter((t) => t.id !== id))
+  }, [])
+
   const addToast = useCallback((data: Omit<ToastData, 'id'>) => {
     const id = ++toastId
     setItems((prev) => [...prev, { ...data, id }])
-    setTimeout(() => {
-      setItems((prev) => prev.filter((t) => t.id !== id))
-    }, 3500)
-  }, [])
+    setTimeout(() => removeToast(id), 3500)
+  }, [removeToast])
 
   useEffect(() => {
     addToastFn = addToast
-    return () => {
-      addToastFn = null
-    }
+    return () => { addToastFn = null }
   }, [addToast])
 
   if (items.length === 0) return null
@@ -46,10 +47,18 @@ export default function Toast() {
       {items.map((item) => (
         <div
           key={item.id}
-          className={`${typeStyles[item.type]} text-white px-4 py-3 rounded-lg shadow-lg text-sm animate-slide-up`}
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-lg rounded-xl px-4 py-3 text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2.5 min-w-[280px]"
           role="alert"
         >
-          {item.message}
+          {iconMap[item.type]}
+          <span className="flex-1">{item.message}</span>
+          <button
+            onClick={() => removeToast(item.id)}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            aria-label="Закрыть"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       ))}
     </div>

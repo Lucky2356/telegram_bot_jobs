@@ -2,6 +2,7 @@ import httpx
 from datetime import datetime, timedelta, timezone
 from scrapers.base import BaseScraper, VacancyData
 from core.config import settings
+from utils.text_cleaner import clean_html
 
 
 HH_API = "https://api.hh.ru/vacancies"
@@ -122,7 +123,7 @@ class HHScraper(BaseScraper):
                     city_name = area.get("name")
 
                 snippet = item.get("snippet", {}) or {}
-                desc = ". ".join(filter(None, [snippet.get("requirement", ""), snippet.get("responsibility", "")]))
+                desc = clean_html(". ".join(filter(None, [snippet.get("requirement", ""), snippet.get("responsibility", "")])))
 
                 results.append(VacancyData(
                     source="hh", source_id=str(item["id"]), title=item.get("name", ""),

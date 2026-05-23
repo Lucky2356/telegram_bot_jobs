@@ -2,6 +2,7 @@ import httpx
 from datetime import datetime
 from scrapers.base import BaseScraper, VacancyData
 from bot.keyboards import CITIES
+from utils.text_cleaner import clean_html
 
 
 TRUDVSEM_API = "https://opendata.trudvsem.ru/api/v1/vacancies"
@@ -86,7 +87,7 @@ class TrudvsemScraper(BaseScraper):
                         v.get("duty", ""), v.get("requirements", ""),
                         v.get("qualification", ""), v.get("skills", ""),
                     ])
-                    desc = " ".join(desc_parts).replace("\n", " ").strip()
+                    desc = clean_html(" ".join(desc_parts).replace("\n", " ").strip())
                     vac_url = v.get("vac-url", "")
 
                     try:

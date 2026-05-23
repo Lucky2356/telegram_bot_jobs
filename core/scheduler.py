@@ -10,6 +10,7 @@ from scrapers.habr_career import HabrCareerScraper
 from scrapers.base import VacancyData, BaseScraper
 from bot.messages import format_vacancy_card
 from bot.keyboards import build_vacancy_actions_keyboard, CITIES, get_synonyms
+from utils.text_cleaner import clean_html
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class Scheduler:
                 "city": v.city,
                 "employment_type": v.employment_type,
                 "experience": v.experience,
-                "description": v.description,
+                "description": clean_html(v.description),
                 "url": v.url,
                 "source": v.source,
                 "published_at": v.published_at.isoformat() if v.published_at else None,
@@ -111,6 +112,44 @@ class Scheduler:
         await self.db.cleanup_old_vacancies(days)
         logger.info("Cleanup completed.")
 
+    async def _send_to_telegram(self):
+        """Send buffered vacancies to Telegram (fire-and-forget)."""
+        snapshot = list(self._user_buffers.items())
+        for user_id, items in snapshot:
+            if not items:
+                continue
+            user = await self.db.get_user(user_id)
+            if not user:
+                continue
+            header = f"🔍 <b>Найдено {len(items)} новых вакансий</b>"
+            try:
+                await self.bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=header,
+                )
+            except Exception as e:
+                logger.warning("Failed to send header: %s", e)
+            for vac_id, source, url, card in items:
+                try:
+                    if len(card) > 4000:
+                        card = card[:4000].rsplit(" ", 1)[0] + "..."
+                    await self.bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=card,
+                        reply_markup=build_vacancy_actions_keyboard(vac_id, source, url),
+                        disable_web_page_preview=True,
+                    )
+                    await asyncio.sleep(0.5)
+                except Exception as e:
+                    logger.warning("Failed to send vacancy %s: %s", vac_id, e)
+        self._user_buffers.clear()
+
+    async def _safe_send_to_telegram(self):
+        try:
+            await self._send_to_telegram()
+        except Exception as e:
+            logger.error("Telegram send failed: %s", e)
+
     async def run_check(self):
         if self._lock.locked():
             logger.info("Check already running, skipping.")
@@ -138,38 +177,14 @@ class Scheduler:
                 total_found += found
                 await self._publish({"type": "filter_done", "filter_id": vf.id, "filter_name": vf.name, "found": found})
 
-            await self._publish({"type": "sending_started", "total": total_found})
-            for user_id, items in self._user_buffers.items():
-                if not items:
-                    continue
-                user = await self.db.get_user(user_id)
-                if not user:
-                    continue
-                header = f"🔍 <b>Найдено {len(items)} новых вакансий</b>"
-                try:
-                    await self.bot.send_message(
-                        chat_id=user.telegram_id,
-                        text=header,
-                    )
-                except Exception as e:
-                    logger.warning("Failed to send header: %s", e)
-                for vac_id, source, url, card in items:
-                    try:
-                        if len(card) > 4000:
-                            card = card[:4000].rsplit(" ", 1)[0] + "..."
-                        await self.bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=card,
-                            reply_markup=build_vacancy_actions_keyboard(vac_id, source, url),
-                            disable_web_page_preview=True,
-                        )
-                        await asyncio.sleep(0.5)
-                    except Exception as e:
-                        logger.warning("Failed to send vacancy %s: %s", vac_id, e)
+        # Lock released — results visible on web immediately
+        await self._publish({"type": "check_complete", "total_found": total_found})
+        logger.info("Search complete, %d found. Sending to Telegram...", total_found)
 
-            self._user_buffers.clear()
-            await self._publish({"type": "check_complete", "total_found": total_found})
-            logger.info("Vacancy check completed.")
+        # Send to Telegram in background — don't block web
+        if total_found > 0:
+            asyncio.create_task(self._safe_send_to_telegram())
+        logger.info("Vacancy check completed.")
 
     async def _check_filter(self, vf):
         user = await self.db.get_user(vf.user_id)
