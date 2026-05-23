@@ -409,23 +409,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             items = scheduler.get_last_results()
             if items:
                 return {"items": items, "checked_at": scheduler.last_results_time, "checking": checking}
-        # Fallback to DB when cache is empty (e.g. after restart)
-        recent = await db.get_recent_vacancies(50)
-        return {
-            "items": [
-                {
-                    "id": v.id,
-                    "title": v.title, "company": v.company, "salary_text": v.salary_text,
-                    "city": v.city, "employment_type": v.employment_type,
-                    "experience": v.experience, "description": clean_html(v.description),
-                    "url": v.url, "source": v.source,
-                    "published_at": v.published_at.isoformat() if v.published_at else None,
-                }
-                for v in recent
-            ],
-            "checked_at": scheduler.last_results_time if scheduler else None,
-            "checking": checking,
-        }
+        return {"items": [], "checked_at": None, "checking": False}
 
     @app.get("/api/history")
     async def api_history(page: int = 1, limit: int = 20):
