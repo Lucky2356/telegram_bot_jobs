@@ -113,11 +113,7 @@ class HHScraper(BaseScraper):
 
                 schedule = item.get("schedule")
                 if schedule and schedule.get("id") == "remote":
-                    if emp_type not in ("remote", None):
-                        # Both: remote schedule + employment type (e.g. full-time remote)
-                        pass  # Keep employment type, remote is implied
-                    else:
-                        emp_type = "remote"
+                    emp_type = "remote"
 
                 exp = None
                 experience = item.get("experience")
