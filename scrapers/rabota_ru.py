@@ -130,8 +130,10 @@ class RabotaRuScraper(BaseScraper):
 
     def _detect_employment_type(self, text: str) -> str | None:
         text_lower = text.lower()
-        if "удален" in text_lower or "дистанци" in text_lower:
+        # Check for remote first (has priority)
+        if "удаленна" in text_lower or "удаленно" in text_lower or "дистанци" in text_lower:
             return "remote"
+        # Then check for specific employment type phrases
         if "частич" in text_lower or "неполн" in text_lower:
             return "part"
         if "проект" in text_lower:

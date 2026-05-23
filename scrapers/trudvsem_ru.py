@@ -50,12 +50,12 @@ class TrudvsemScraper(BaseScraper):
                     salary_currency = v.get("currency", "RUB")
                     smin = v.get("salary_min")
                     smax = v.get("salary_max")
-                    if smin or smax:
+                    if smin and int(smin) != 0 or smax and int(smax) != 0:
                         parts = []
-                        if smin:
-                            parts.append(f"от {smin}")
-                        if smax:
-                            parts.append(f"до {smax}")
+                        if smin and int(smin) != 0:
+                            parts.append(f"от {int(smin):,}".replace(",", " "))
+                        if smax and int(smax) != 0:
+                            parts.append(f"до {int(smax):,}".replace(",", " "))
                         salary_text = " ".join(parts) + f" {salary_currency}"
                     elif v.get("salary"):
                         salary_text = f"{v['salary']} {salary_currency}"
@@ -63,9 +63,10 @@ class TrudvsemScraper(BaseScraper):
                     emp_type = None
                     emp = v.get("employment", "")
                     mapping = {
-                        "полная занятость": "full", "частичная": "part",
-                        "дистанционная": "remote", "удаленно": "remote",
-                        "удаленная": "remote", "вахтовый метод": "full",
+                        "дистанционная": "remote", "удаленная": "remote", "удаленно": "remote",
+                        "полная занятость": "full", "вахтовый метод": "full",
+                        "частичная": "part",
+                        "проект": "project",
                         "стажировка": "internship",
                     }
                     if emp:
