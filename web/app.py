@@ -37,14 +37,27 @@ class FilterUpdate(BaseModel):
     exclude_keywords: list[str] = []
 
 
+_cached_user_id: int | None = None
+
 async def _get_first_user(db: Database):
+    global _cached_user_id
+    if _cached_user_id:
+        user = await db.get_user(_cached_user_id)
+        if user:
+            return user
     real_user = await db.get_first_real_user()
     if real_user is not None:
         web_user = await db.get_user_by_telegram_id(0)
         if web_user is not None and web_user.id != real_user.id:
             await db.merge_user_data(source_user_id=web_user.id, target_user_id=real_user.id)
+            async with db.session_factory() as session:
+                await session.delete(web_user)
+                await session.commit()
+        _cached_user_id = real_user.id
         return real_user
-    return await db.get_or_create_user(telegram_id=0, username="web_user")
+    web_user = await db.get_or_create_user(telegram_id=0, username="web_user")
+    _cached_user_id = web_user.id
+    return web_user
 
 
 async def _serve_react_or_fallback(app: FastAPI, request: Request, templates: Jinja2Templates):

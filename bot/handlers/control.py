@@ -243,14 +243,8 @@ async def on_check_now(callback: CallbackQuery, scheduler: Scheduler):
     await _safe_edit(callback.message, text="🔍 Проверяю вакансии...")
     try:
         asyncio.create_task(scheduler.run_check())
-        await callback.message.answer(
-            "✅ Проверка запущена!",
-            reply_markup=build_start_keyboard(),
-        )
     except Exception as e:
         logging.getLogger(__name__).error("Failed to run check: %s", e, exc_info=True)
-        await callback.message.answer(
-            "❌ Ошибка запуска проверки.",
-            reply_markup=build_start_keyboard(),
-        )
+    await _safe_edit(callback.message, text="✅ Проверка запущена!",
+        reply_markup=build_start_keyboard())
     await callback.answer()
