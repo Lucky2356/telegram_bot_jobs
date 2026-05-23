@@ -73,9 +73,9 @@ async def on_vacancy_similar(callback: CallbackQuery, state: FSMContext, db: Dat
     lines.append("<b>Сайты:</b> Все")
 
     from bot.keyboards import build_confirm_keyboard
-    await callback.message.edit_text(
-        "\n".join(lines) + "\n\nСоздать этот фильтр?",
+    from bot.handlers.filters import _safe_edit as _se
+    await _se(callback.message,
+        text="\n".join(lines) + "\n\nСоздать этот фильтр?",
         reply_markup=build_confirm_keyboard(),
-        parse_mode="HTML",
     )
     await callback.answer()

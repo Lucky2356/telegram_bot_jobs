@@ -78,7 +78,7 @@ async def on_keyword_toggle(callback: CallbackQuery, state: FSMContext):
     else:
         selected.append(kw)
     await state.update_data(selected_keywords=selected)
-    await callback.message.edit_reply_markup(reply_markup=build_keywords_keyboard(selected))
+    await _safe_edit(callback.message, reply_markup=build_keywords_keyboard(selected))
     await callback.answer()
 
 
@@ -236,6 +236,9 @@ async def on_salary_select(callback: CallbackQuery, state: FSMContext):
 
 @router.message(FilterWizard.custom_salary)
 async def on_custom_salary(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Пожалуйста, введи число (например: 250000)")
+        return
     text = message.text.strip().replace(" ", "").replace(",", ".")
     import re
     nums = re.findall(r"\d+", text)
