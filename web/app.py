@@ -82,7 +82,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
         @app.middleware("http")
         async def auth_middleware(request: Request, call_next):
             path = request.url.path
-            if path.startswith("/api/") and not path.startswith("/api/auth/"):
+            EXCLUDED_PREFIXES = ("/api/auth/", "/api/events")
+            if path.startswith("/api/") and not path.startswith(EXCLUDED_PREFIXES):
                 auth = request.headers.get("Authorization", "")
                 if not auth.startswith("Bearer ") or not verify_token(auth[7:]):
                     return HTMLResponse(

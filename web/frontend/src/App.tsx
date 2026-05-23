@@ -341,12 +341,14 @@ function AuthenticatedApp() {
       </div>
 
       {createOpen && config && (
-        <FilterModal
-          config={config}
-          filter={null}
-          onClose={handleCloseFilter}
-          onSaved={handleSavedFilter}
-        />
+        <ErrorBoundary>
+          <FilterModal
+            config={config}
+            filter={null}
+            onClose={handleCloseFilter}
+            onSaved={handleSavedFilter}
+          />
+        </ErrorBoundary>
       )}
 
       <Toast />
