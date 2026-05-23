@@ -21,7 +21,7 @@ class RabotaRuScraper(BaseScraper):
         query = " ".join(keywords)
         results: list[VacancyData] = []
         seen: set = set()
-        for page in range(1):
+        for page in range(3):
             params: dict = {"query": query}
             if city:
                 params["city"] = CITIES.get(city, city)

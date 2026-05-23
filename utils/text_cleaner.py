@@ -18,4 +18,12 @@ def extract_salary_numbers(text: str | None) -> tuple[int | None, int | None]:
     nums = [n for n in nums if n > 1000]
     if not nums:
         return None, None
+    if len(nums) == 1:
+        val = nums[0]
+        text_lower = text.lower()
+        if "до" in text_lower and "от" not in text_lower:
+            return (None, val)
+        elif "от" in text_lower and "до" not in text_lower:
+            return (val, None)
+        return (val, val)
     return min(nums), max(nums)

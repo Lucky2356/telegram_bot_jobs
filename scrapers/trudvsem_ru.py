@@ -50,12 +50,17 @@ class TrudvsemScraper(BaseScraper):
                     salary_currency = v.get("currency", "RUB")
                     smin = v.get("salary_min")
                     smax = v.get("salary_max")
-                    if smin and int(smin) != 0 or smax and int(smax) != 0:
+                    try:
+                        smin_int = int(smin) if smin else None
+                        smax_int = int(smax) if smax else None
+                    except (ValueError, TypeError):
+                        smin_int = smax_int = None
+                    if (smin_int and smin_int != 0) or (smax_int and smax_int != 0):
                         parts = []
-                        if smin and int(smin) != 0:
-                            parts.append(f"от {int(smin):,}".replace(",", " "))
-                        if smax and int(smax) != 0:
-                            parts.append(f"до {int(smax):,}".replace(",", " "))
+                        if smin_int and smin_int != 0:
+                            parts.append(f"от {smin_int:,}".replace(",", " "))
+                        if smax_int and smax_int != 0:
+                            parts.append(f"до {smax_int:,}".replace(",", " "))
                         salary_text = " ".join(parts) + f" {salary_currency}"
                     elif v.get("salary"):
                         salary_text = f"{v['salary']} {salary_currency}"
