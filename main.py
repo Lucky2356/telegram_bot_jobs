@@ -32,7 +32,11 @@ async def main():
         from alembic.config import Config
         from alembic import command
         alembic_cfg = Config("alembic.ini")
-        sync_url = settings.DATABASE_URL.replace("+aiosqlite", "+pysqlite")
+        SQLITE_PREFIX = "sqlite+aiosqlite://"
+        if settings.DATABASE_URL.startswith(SQLITE_PREFIX):
+            sync_url = "sqlite+pysqlite://" + settings.DATABASE_URL[len(SQLITE_PREFIX):]
+        else:
+            sync_url = settings.DATABASE_URL
         alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
         command.upgrade(alembic_cfg, "head")
         logger.info("Database migrations applied")

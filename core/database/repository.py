@@ -202,14 +202,12 @@ class Database:
                 await session.commit()
 
     async def is_blocked(self, user_id: int, company: str | None, title: str) -> bool:
-        if not company:
-            return False
         async with self.session_factory() as session:
             blocks = await session.execute(
                 select(Blocklist).where(Blocklist.user_id == user_id)
             )
             for b in blocks.scalars().all():
-                if b.pattern.lower() in (company or "").lower():
+                if company and b.pattern.lower() in company.lower():
                     return True
                 if b.pattern.lower() in title.lower():
                     return True
