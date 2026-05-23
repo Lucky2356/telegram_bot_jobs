@@ -131,7 +131,7 @@ class HabrCareerScraper(BaseScraper):
                 exp_el = card.select_one("[class*=experience]") or card.select_one("[class*=exp-]")
                 if exp_el:
                     exp_text = exp_el.get_text(strip=True).lower()
-                    if "без опыта" in exp_text:
+                    if "без опыта" in exp_text and not re.search(r'\d+\s*(?:года|лет|год)', exp_text):
                         exp_value = "no"
                     else:
                         exp_years = re.findall(r'(\d+)\s*(?:года|лет|год)', exp_text)

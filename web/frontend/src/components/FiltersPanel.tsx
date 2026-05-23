@@ -121,7 +121,7 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
                     <button
                       onClick={() => handleCheckOne(f.id)}
                       disabled={checkingId === f.id}
-                      className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] text-secondary transition hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                      className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] text-secondary transition hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
                       aria-label={`Проверить фильтр ${f.name}`}
                     >
                       <Play className="h-3.5 w-3.5" />
@@ -129,28 +129,28 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
                   )}
                   <button
                     onClick={() => handleToggle(f.id)}
-                    className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] text-secondary transition hover:text-primary"
+                    className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] text-secondary transition hover:text-primary"
                     aria-label={f.active ? 'Выключить фильтр' : 'Включить фильтр'}
                   >
                     <Power className="h-3.5 w-3.5" />
                   </button>
                   <button
                     onClick={() => handleClone(f.id)}
-                    className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] text-secondary transition hover:text-primary"
+                    className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] text-secondary transition hover:text-primary"
                     aria-label="Клонировать фильтр"
                   >
                     <Copy className="h-3.5 w-3.5" />
                   </button>
                   <button
                     onClick={() => setEditFilter(f)}
-                    className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] text-secondary transition hover:text-primary"
+                    className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--border)] bg-[color:var(--surface-strong)] text-secondary transition hover:text-primary"
                     aria-label="Редактировать фильтр"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <button
                     onClick={() => setDeleteConfirm(f.id)}
-                    className="focus-ring inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-400/30 bg-rose-500/10 text-rose-300 transition hover:bg-rose-500/20"
+                    className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-400/30 bg-rose-500/10 text-rose-300 transition hover:bg-rose-500/20"
                     aria-label="Удалить фильтр"
                   >
                     <Trash2 className="h-3.5 w-3.5" />

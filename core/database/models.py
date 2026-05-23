@@ -89,25 +89,38 @@ class SentVacancy(Base):
     __tablename__ = "sent_vacancies"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    vacancy_id: Mapped[int] = mapped_column(ForeignKey("vacancies.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    vacancy_id: Mapped[int] = mapped_column(ForeignKey("vacancies.id", ondelete="CASCADE"), nullable=False)
     filter_id: Mapped[int | None] = mapped_column(ForeignKey("filters.id"))
     sent_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "vacancy_id", name="uq_sent_user_vacancy"),
+    )
 
 
 class SavedVacancy(Base):
     __tablename__ = "saved_vacancies"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    vacancy_id: Mapped[int] = mapped_column(ForeignKey("vacancies.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    vacancy_id: Mapped[int] = mapped_column(ForeignKey("vacancies.id", ondelete="CASCADE"), nullable=False)
     saved_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "vacancy_id", name="uq_saved_user_vacancy"),
+    )
 
 
 class Blocklist(Base):
     __tablename__ = "blocklist"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     pattern: Mapped[str] = mapped_column(String(500), nullable=False)
     type: Mapped[str] = mapped_column(String(20), nullable=False)  # "company" or "keyword"
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "pattern", "type", name="uq_blocklist_entry"),
+    )

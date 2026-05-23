@@ -155,13 +155,12 @@ class RabotaRuScraper(BaseScraper):
 
     def _detect_experience(self, text: str) -> str | None:
         text_lower = text.lower()
-        if "без опыта" in text_lower:
+        exp_years = re.findall(r'(\d+)\s*(?:года|лет|год)', text_lower)
+        if "без опыта" in text_lower and not exp_years:
             return "no"
-        if "опыт" in text_lower:
-            exp_years = re.findall(r'(?:от\s*)?(\d+)\s*(?:года|лет|год)', text_lower)
-            if exp_years:
-                years = int(exp_years[0])
-                if years <= 1: return "1-3"
-                if years <= 3: return "3-6"
-                return "6+"
+        if exp_years:
+            years = max(int(y) for y in exp_years)
+            if years <= 1: return "1-3"
+            if years <= 3: return "3-6"
+            return "6+"
         return None
