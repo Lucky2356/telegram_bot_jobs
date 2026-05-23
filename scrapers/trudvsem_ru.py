@@ -93,9 +93,27 @@ class TrudvsemScraper(BaseScraper):
                     try:
                         sal_min_val = int(smin) if smin else None
                         sal_max_val = int(smax) if smax else None
+                        if sal_min_val == 0: sal_min_val = None
+                        if sal_max_val == 0: sal_max_val = None
                     except (ValueError, TypeError):
                         sal_min_val = None
                         sal_max_val = None
+
+                    exp_value = None
+                    min_exp = v.get("minExperience")
+                    if min_exp is not None:
+                        try:
+                            exp_months = int(min_exp)
+                            if exp_months <= 0:
+                                exp_value = "no"
+                            elif exp_months <= 12:
+                                exp_value = "1-3"
+                            elif exp_months <= 36:
+                                exp_value = "3-6"
+                            else:
+                                exp_value = "6+"
+                        except (ValueError, TypeError):
+                            pass
 
                     results.append(VacancyData(
                         source="trudvsem",
@@ -106,6 +124,7 @@ class TrudvsemScraper(BaseScraper):
                         salary_min=sal_min_val,
                         salary_max=sal_max_val,
                         employment_type=emp_type,
+                        experience=exp_value,
                         city=city_name,
                         description=desc,
                         url=vac_url,

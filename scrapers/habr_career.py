@@ -4,6 +4,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from scrapers.base import BaseScraper, VacancyData
 from bot.keyboards import CITIES
+from utils.text_cleaner import extract_salary_numbers
 
 
 HABR_URL = "https://career.habr.com/vacancies"
@@ -81,6 +82,8 @@ class HabrCareerScraper(BaseScraper):
                         break
 
                 salary_text = None
+                salary_min = None
+                salary_max = None
                 for sel in [
                     "div.vacancy-card__price",
                     "span[class*=salary]",
@@ -90,31 +93,46 @@ class HabrCareerScraper(BaseScraper):
                     el = card.select_one(sel)
                     if el:
                         salary_text = el.get_text(strip=True)
+                        salary_min, salary_max = extract_salary_numbers(salary_text)
                         break
 
                 city_name = None
                 emp_type = None
+                exp_value = None
+                _emp_type_kw = {"удаленно": "remote", "удаленная": "remote",
+                                "полный": "full", "полная": "full",
+                                "частичная": "part", "проект": "project",
+                                "стажировка": "internship"}
                 meta = card.select_one("div.vacancy-card__meta")
                 if meta:
                     meta_text = meta.get_text(" ", strip=True)
                     parts = meta_text.split("•")
                     if parts:
-                        city_name = parts[0].strip()
-                    emp_part = parts[-1].strip() if len(parts) > 1 else None
-                    if emp_part:
-                        emp_type_mapping = {
-                            "удаленно": "remote",
-                            "удаленная": "remote",
-                            "полный": "full",
-                            "полная": "full",
-                            "частичная": "part",
-                            "проект": "project",
-                            "стажировка": "internship",
-                        }
-                        for key, val in emp_type_mapping.items():
-                            if key in emp_part.lower():
-                                emp_type = val
+                        candidate = parts[0].strip()
+                        if not any(k in candidate.lower() for k in _emp_type_kw):
+                            city_name = candidate
+                    if len(parts) > 1:
+                        for part in parts[1:]:
+                            p = part.strip().lower()
+                            for key, val in _emp_type_kw.items():
+                                if key in p:
+                                    emp_type = val
+                                    break
+                            if emp_type:
                                 break
+
+                exp_el = card.select_one("[class*=experience]") or card.select_one("[class*=exp-]")
+                if exp_el:
+                    exp_text = exp_el.get_text(strip=True).lower()
+                    if "без опыта" in exp_text:
+                        exp_value = "no"
+                    else:
+                        exp_years = re.findall(r'(\d+)\s*(?:года|лет|год)', exp_text)
+                        if exp_years:
+                            years = int(exp_years[0])
+                            if years <= 1: exp_value = "1-3"
+                            elif years <= 3: exp_value = "3-6"
+                            else: exp_value = "6+"
 
                 skils = card.select_one("div.vacancy-card__skills")
                 desc = skils.get_text(", ", strip=True) if skils else None
@@ -125,7 +143,10 @@ class HabrCareerScraper(BaseScraper):
                     title=title,
                     company=company,
                     salary_text=salary_text,
+                    salary_min=salary_min,
+                    salary_max=salary_max,
                     employment_type=emp_type,
+                    experience=exp_value,
                     city=city_name,
                     description=desc,
                     url=href,

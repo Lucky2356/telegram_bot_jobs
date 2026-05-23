@@ -4,6 +4,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from scrapers.base import BaseScraper, VacancyData
 from bot.keyboards import CITIES
+from utils.text_cleaner import extract_salary_numbers, clean_html
 
 
 RABOTA_URL = "https://www.rabota.ru/vacancy/search"
@@ -75,6 +76,8 @@ class RabotaRuScraper(BaseScraper):
                         break
 
             salary_text = None
+            salary_min = None
+            salary_max = None
             if card:
                 for sel in [
                     "div[class*=salary]", "span[class*=salary]",
@@ -83,6 +86,7 @@ class RabotaRuScraper(BaseScraper):
                     el = card.select_one(sel)
                     if el:
                         salary_text = el.get_text(strip=True)
+                        salary_min, salary_max = extract_salary_numbers(salary_text)
                         break
 
             city_name = None
@@ -97,8 +101,15 @@ class RabotaRuScraper(BaseScraper):
                         break
 
             emp_type = None
+            exp_value = None
+            desc_value = None
             if card:
-                emp_type = self._detect_employment_type(card.get_text(" "))
+                card_text = card.get_text(" ", strip=True)
+                emp_type = self._detect_employment_type(card_text)
+                exp_value = self._detect_experience(card_text)
+                desc_el = card.select_one("[class*=description]") or card.select_one("[class*=desc]") or card.select_one("[data-qa*=vacancy-description]")
+                if desc_el:
+                    desc_value = clean_html(desc_el.get_text(strip=True))
 
             results.append(VacancyData(
                 source="rabota",
@@ -106,8 +117,12 @@ class RabotaRuScraper(BaseScraper):
                 title=title,
                 company=company,
                 salary_text=salary_text,
+                salary_min=salary_min,
+                salary_max=salary_max,
                 employment_type=emp_type,
+                experience=exp_value,
                 city=city_name,
+                description=desc_value,
                 url=href,
             ))
 
@@ -123,6 +138,19 @@ class RabotaRuScraper(BaseScraper):
             return "project"
         if "стажировк" in text_lower:
             return "internship"
-        if "полн" in text_lower:
+        if "полный рабочий" in text_lower or "полная занятость" in text_lower or "полный день" in text_lower:
             return "full"
+        return None
+
+    def _detect_experience(self, text: str) -> str | None:
+        text_lower = text.lower()
+        if "без опыта" in text_lower:
+            return "no"
+        if "опыт" in text_lower:
+            exp_years = re.findall(r'(?:от\s*)?(\d+)\s*(?:года|лет|год)', text_lower)
+            if exp_years:
+                years = int(exp_years[0])
+                if years <= 1: return "1-3"
+                if years <= 3: return "3-6"
+                return "6+"
         return None
