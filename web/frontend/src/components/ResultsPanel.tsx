@@ -80,13 +80,13 @@ export default function ResultsPanel({
     if (sourceFilter) items = items.filter((v) => v.source === sourceFilter)
 
     if (sortKey === 'date-desc' || sortKey === 'date-asc') {
-      items = items.toSorted((a, b) => {
+      items = [...items].sort((a, b) => {
         const da = a.published_at ? new Date(a.published_at).getTime() : 0
         const db = b.published_at ? new Date(b.published_at).getTime() : 0
         return sortKey === 'date-desc' ? db - da : da - db
       })
     } else {
-      items = items.toSorted((a, b) =>
+      items = [...items].sort((a, b) =>
         sortKey === 'salary-desc' ? salaryRank(b) - salaryRank(a) : salaryRank(a) - salaryRank(b),
       )
     }
@@ -101,7 +101,7 @@ export default function ResultsPanel({
       const key = config.sites[item.source] || item.source
       ;(map[key] ??= []).push(item)
     }
-    return Object.entries(map).toSorted(([a], [b]) => a.localeCompare(b))
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
   }, [groupBy, processed, config.sites])
 
   return (

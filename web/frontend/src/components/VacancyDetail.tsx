@@ -59,8 +59,8 @@ export default function VacancyDetail({ vacancy, config, onClose, onSaved }: Vac
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-end bg-slate-950/50 md:items-stretch" role="dialog" aria-modal="true" aria-label={vacancy.title}>
-      <div className="h-full w-full max-w-2xl animate-soft-scale border-l border-[var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--shadow-lg)]">
+    <div className="fixed inset-0 z-50 flex items-end justify-end bg-slate-950/50 md:items-stretch" role="dialog" aria-modal="true" aria-label={vacancy.title} onClick={onClose}>
+      <div className="h-full w-full max-w-2xl animate-soft-scale border-l border-[var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--shadow-lg)]" onClick={(e) => e.stopPropagation()}>
         <div className="flex h-full flex-col">
           <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[var(--border)] bg-[color:var(--surface)]/92 px-4 py-4 backdrop-blur md:px-6">
             <div>

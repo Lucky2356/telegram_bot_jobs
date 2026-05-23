@@ -304,6 +304,10 @@ function AuthenticatedApp() {
         // ignore
       }
     }
+    es.onerror = () => {
+      setChecking(false)
+      setCurrentFilter(null)
+    }
     return () => es.close()
   }, [fetchResults])
 

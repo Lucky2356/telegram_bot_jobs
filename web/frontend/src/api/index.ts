@@ -12,8 +12,8 @@ function getAuthHeaders(): Record<string, string> {
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const resp = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     ...options,
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders(), ...options?.headers },
   })
   if (resp.status === 401) {
     sessionStorage.removeItem('auth_token')
