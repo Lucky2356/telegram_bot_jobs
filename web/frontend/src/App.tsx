@@ -28,6 +28,37 @@ const loadingSpinner = (
   </div>
 )
 
+function AuthGate({ onLogin }: { onLogin: (token: string) => void }) {
+  const [authState, setAuthState] = useState<'loading' | 'login' | 'done'>(() =>
+    sessionStorage.getItem('auth_token') ? 'done' : 'loading'
+  )
+
+  useEffect(() => {
+    if (authState !== 'loading') return
+    // Auto-login for backward compat (без WEB_PASSWORD)
+    fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: '' }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok && data.token) {
+          sessionStorage.setItem('auth_token', data.token)
+          onLogin(data.token)
+          setAuthState('done')
+        } else {
+          setAuthState('login')
+        }
+      })
+      .catch(() => setAuthState('login'))
+  }, [authState, onLogin])
+
+  if (authState === 'loading') return loadingSpinner
+  if (authState === 'login') return <LoginPage onLogin={(t) => { onLogin(t); setAuthState('done') }} />
+  return null
+}
+
 export default function App() {
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem('auth_token'))
 
@@ -36,34 +67,20 @@ export default function App() {
     setToken(newToken)
   }
 
-  // Auto-login для backward compat (без WEB_PASSWORD)
-  useEffect(() => {
-    if (!token) {
-      fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: '' }),
-      })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.ok && data.token) {
-            sessionStorage.setItem('auth_token', data.token)
-            setToken(data.token)
-          }
-        })
-        .catch(() => {})
-    }
-  }, [])
-
   if (!token) {
-    return <LoginPage onLogin={handleLogin} />
+    return <AuthGate onLogin={handleLogin} />
   }
 
-  return <AuthenticatedApp />
+  return (
+    <ErrorBoundary>
+      <AuthenticatedApp />
+    </ErrorBoundary>
+  )
 }
 
 function AuthenticatedApp() {
   const [config, setConfig] = useState<AppConfig | null>(null)
+  const [configError, setConfigError] = useState(false)
   const [status, setStatus] = useState<ParserStatus | null>(null)
   const [filters, setFilters] = useState<VacancyFilter[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
@@ -91,7 +108,13 @@ function AuthenticatedApp() {
   }, [dark])
 
   const fetchConfig = useCallback(async () => {
-    try { setConfig(await api.getConfig()) } catch { /* ignore */ }
+    try {
+      setConfig(await api.getConfig())
+      setConfigError(false)
+    } catch {
+      setConfigError(true)
+      toast.error('Не удалось загрузить конфигурацию. Проверьте подключение к серверу.')
+    }
   }, [])
 
   const fetchStatus = useCallback(async () => {
@@ -178,7 +201,7 @@ function AuthenticatedApp() {
   }, [fetchFilters, fetchResults, fetchStats, fetchSaved, fetchBlocklist])
 
   const handleCloseFilter = useCallback(() => setCreateOpen(false), [])
-  const handleSavedFilter = useCallback(() => { handleRefresh(); fetchResults() }, [handleRefresh, fetchResults])
+  const handleSavedFilter = useCallback(() => { handleRefresh() }, [handleRefresh])
 
   const pageTitle = TABS.find((t) => t.key === activeTab)?.label || ''
 
@@ -297,15 +320,23 @@ function AuthenticatedApp() {
             </ErrorBoundary>
           )}
 
-          {activeTab === 'stats' && stats && (
+          {activeTab === 'stats' && (stats ? (
             <ErrorBoundary>
               <Suspense fallback={<div className="text-center py-20 text-slate-400"><p className="text-sm">Загрузка графиков...</p></div>}>
                 <StatsPanel stats={stats} />
               </Suspense>
             </ErrorBoundary>
-          )}
+          ) : loadingSpinner)}
 
-          {!config && loadingSpinner}
+          {!config && !configError && loadingSpinner}
+          {configError && (
+            <div className="text-center py-20 text-slate-400">
+              <p className="mb-3">Не удалось загрузить данные</p>
+              <button onClick={fetchConfig} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+                Повторить
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
