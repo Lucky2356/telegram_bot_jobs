@@ -1,4 +1,5 @@
 import asyncio
+import os
 import pytest
 import pytest_asyncio
 from typing import AsyncGenerator
@@ -8,6 +9,9 @@ from core.database.models import Base
 
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
+
+# Disable auth middleware for tests (env var overrides .env file)
+os.environ["WEB_PASSWORD"] = ""
 
 
 @pytest_asyncio.fixture
