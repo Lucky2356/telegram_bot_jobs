@@ -5,6 +5,8 @@ from enum import StrEnum
 
 class WizardAction(StrEnum):
     NOOP = "noop"
+    KW_GROUP_SELECT = "kwg"
+    KW_GROUP_BACK = "kwg_bk"
     KEYWORD_TOGGLE = "kw"
     KEYWORD_DONE = "kw_done"
     EXCLUDE_TOGGLE = "ex_kw"
@@ -298,6 +300,49 @@ def _build_keyword_grid(
         nav_row.append(_btn("⬅️ Назад", back_action))
     nav_row.append(_btn(f"✅ {title}", done_action))
     builder.row(*nav_row)
+    builder.row(_btn("❌ Отмена", WizardAction.CANCEL))
+    return builder.as_markup()
+
+
+def build_keyword_groups_keyboard(selected: list[str] | None = None) -> InlineKeyboardMarkup:
+    """First step: show 15 groups, user picks one to see keywords."""
+    selected = selected or []
+    cnt = len(selected)
+    done_label = f"✅ Готово ({cnt} выбрано)" if cnt else "✅ Пропустить (не выбрано)"
+    builder = InlineKeyboardBuilder()
+    for group_name in KEYWORDS_BY_GROUP:
+        has_sel = any(s in KEYWORDS_BY_GROUP[group_name] for s in selected)
+        label = f"✅ {group_name}" if has_sel else group_name
+        builder.row(InlineKeyboardButton(
+            text=label,
+            callback_data=FilterCallback(action=WizardAction.KW_GROUP_SELECT, value=group_name).pack(),
+        ))
+    builder.row(_btn(done_label, WizardAction.KEYWORD_DONE, value="__done__"))
+    builder.row(_btn("❌ Отмена", WizardAction.CANCEL))
+    return builder.as_markup()
+
+
+def build_keywords_for_group_keyboard(group: str, selected: list[str]) -> InlineKeyboardMarkup:
+    """Second step: show keywords for ONE selected group + nav."""
+    builder = InlineKeyboardBuilder()
+    kw_dict = KEYWORDS_BY_GROUP.get(group, {})
+    # Top nav
+    builder.row(_btn("⬅️ Назад к группам", WizardAction.KW_GROUP_BACK))
+    cnt = sum(1 for s in selected if s in kw_dict)
+    builder.row(_btn(f"✅ Далее → ({cnt} выбрано)", WizardAction.KEYWORD_DONE, value="__done__"))
+    # Keywords
+    row_buttons = []
+    for display_name in kw_dict:
+        text = f"✅ {display_name}" if display_name in selected else display_name
+        row_buttons.append(InlineKeyboardButton(
+            text=text,
+            callback_data=FilterCallback(action=WizardAction.KEYWORD_TOGGLE, value=_KW_ID.get(display_name, display_name)).pack(),
+        ))
+    for i in range(0, len(row_buttons), 4):
+        builder.row(*row_buttons[i:i + 4])
+    # Bottom nav
+    builder.row(_btn(f"✅ Далее → ({cnt} выбрано)", WizardAction.KEYWORD_DONE, value="__done__"))
+    builder.row(_btn("⬅️ Назад к группам", WizardAction.KW_GROUP_BACK))
     builder.row(_btn("❌ Отмена", WizardAction.CANCEL))
     return builder.as_markup()
 

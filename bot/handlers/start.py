@@ -3,7 +3,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from bot.keyboards import build_start_keyboard, FilterCallback, WizardAction, build_keywords_keyboard
+from bot.keyboards import build_start_keyboard, FilterCallback, WizardAction, build_keywords_keyboard, build_keyword_groups_keyboard
 from bot.handlers.filters import FilterWizard
 from core.database.repository import Database
 
@@ -71,9 +71,9 @@ async def main_add(callback: CallbackQuery, state: FSMContext):
         sites=[],
     )
     await state.set_state(FilterWizard.keywords)
-    await _safe_edit(callback.message, text="Шаг 1 — Выбери ключевые слова для поиска\n\n"
-        "Нажимай на слова, чтобы добавить их в фильтр.\n"
-        "Можно выбрать несколько из разных групп.",
-        reply_markup=build_keywords_keyboard([]),
+    await _safe_edit(callback.message, text="Шаг 1 — Выбери категорию ключевых слов\n\n"
+        "Нажми на категорию, чтобы увидеть слова внутри.\n"
+        "Можно выбрать слова из нескольких категорий.",
+        reply_markup=build_keyword_groups_keyboard([]),
     )
     await callback.answer()

@@ -6,13 +6,15 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.exceptions import TelegramBadRequest
 from bot.keyboards import (
     FilterCallback, WizardAction,
-    build_keywords_keyboard, build_exclude_keywords_keyboard,
+    build_keywords_keyboard, build_keyword_groups_keyboard,
+    build_keywords_for_group_keyboard,
+    build_exclude_keywords_keyboard,
     build_city_keyboard, build_experience_keyboard,
     build_salary_keyboard,
     build_employment_keyboard, build_sites_keyboard,
     build_confirm_keyboard, build_start_keyboard,
     build_filters_list_keyboard,
-    SALARIES, EXPERIENCE, EMPLOYMENT_TYPES, SITES,
+    SALARIES, EXPERIENCE, EMPLOYMENT_TYPES, SITES, KEYWORDS_BY_GROUP,
     _ID_KW,
 )
 from core.database.repository import Database
@@ -60,11 +62,38 @@ async def cmd_add_filter(message: Message, state: FSMContext):
     )
     await state.set_state(FilterWizard.keywords)
     await message.answer(
-        "Выбери ключевые слова для поиска\n\n"
-        "Нажимай на слова, чтобы добавить их в фильтр.\n"
-        "Можно выбрать несколько из разных групп.",
-        reply_markup=build_keywords_keyboard([]),
+        "Шаг 1 — Выбери категорию ключевых слов\n\n"
+        "Нажми на категорию, чтобы увидеть слова внутри.\n"
+        "Можно выбрать слова из нескольких категорий.",
+        reply_markup=build_keyword_groups_keyboard(),
     )
+
+
+@router.callback_query(FilterCallback.filter(F.action == WizardAction.KW_GROUP_SELECT))
+async def on_keyword_group_select(callback: CallbackQuery, state: FSMContext):
+    group = FilterCallback.unpack(callback.data).value
+    data = await state.get_data()
+    selected: list[str] = data.get("selected_keywords", [])
+    await _safe_edit(callback.message, text=f"📁 {group}\n\nНажимай на слова, чтобы добавить их в фильтр.",
+        reply_markup=build_keywords_for_group_keyboard(group, selected),
+    )
+    await callback.answer()
+
+
+@router.callback_query(FilterCallback.filter(F.action == WizardAction.KW_GROUP_BACK))
+async def on_keyword_group_back(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    selected: list[str] = data.get("selected_keywords", [])
+    cnt = len(selected)
+    text = "Шаг 1 — Выбери категорию ключевых слов\n\n"
+    if cnt:
+        text += f"✅ Выбрано {cnt} слов. Можешь добавить ещё из других категорий."
+    else:
+        text += "Нажми на категорию, чтобы увидеть слова внутри."
+    await _safe_edit(callback.message, text=text,
+        reply_markup=build_keyword_groups_keyboard(selected),
+    )
+    await callback.answer()
 
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.KEYWORD_TOGGLE))
@@ -75,11 +104,11 @@ async def on_keyword_toggle(callback: CallbackQuery, state: FSMContext):
     selected: list[str] = data.get("selected_keywords", [])
     if kw in selected:
         selected.remove(kw)
+        await callback.answer(f"🚫 {kw} убрано")
     else:
         selected.append(kw)
+        await callback.answer(f"✅ {kw} добавлено")
     await state.update_data(selected_keywords=selected)
-    await _safe_edit(callback.message, reply_markup=build_keywords_keyboard(selected))
-    await callback.answer()
 
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.NOOP))
@@ -103,6 +132,7 @@ async def on_keyword_done(callback: CallbackQuery, state: FSMContext):
     if not selected:
         await callback.answer("Выбери хотя бы одно ключевое слово!", show_alert=True)
         return
+    await callback.answer(f"✅ Выбрано {len(selected)} слов")
     await state.set_state(FilterWizard.exclude_keywords)
     excluded = data.get("excluded_keywords", [])
     await _safe_edit(callback.message, text="Выбери слова, которые нужно ИСКЛЮЧИТЬ\n\n"
