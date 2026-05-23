@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import re
 from aiogram import Bot
 from core.database.repository import Database
 from scrapers.hh_ru import HHScraper
@@ -242,7 +243,7 @@ class Scheduler:
                 return
         if vf.city:
             city_label = CITIES.get(vf.city, vf.city).lower()
-            if not vac_data.city or city_label not in vac_data.city.lower():
+            if not vac_data.city or re.search(rf"\b{re.escape(city_label)}\b", vac_data.city.lower()) is None:
                 return
         if experience:
             if not vac_data.experience or vac_data.experience != experience:
@@ -275,18 +276,18 @@ class Scheduler:
     def _matches_keywords(self, vac: VacancyData, keywords: list[str]) -> bool:
         title_lower = vac.title.lower()
         for kw in keywords:
-            if kw.lower() in title_lower:
+            if re.search(rf"\b{re.escape(kw.lower())}\b", title_lower):
                 return True
         if vac.description:
             desc_lower = vac.description.lower()
             for kw in keywords:
-                if kw.lower() in desc_lower:
+                if re.search(rf"\b{re.escape(kw.lower())}\b", desc_lower):
                     return True
         return False
 
     def _has_excluded(self, vac: VacancyData, exclude_keywords: list[str]) -> bool:
         text_lower = f"{vac.title} {vac.description or ''}".lower()
         for kw in exclude_keywords:
-            if kw.lower() in text_lower:
+            if re.search(rf"\b{re.escape(kw.lower())}\b", text_lower):
                 return True
         return False

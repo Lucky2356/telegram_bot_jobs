@@ -18,10 +18,15 @@ def _load_secret() -> str:
     except FileNotFoundError:
         secret = secrets.token_hex(32)
         try:
-            with open(_SECRET_FILE, "w") as f:
+            fd = os.open(_SECRET_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            with os.fdopen(fd, "w") as f:
                 f.write(secret)
-        except OSError:
-            pass
+        except (OSError, FileExistsError):
+            try:
+                with open(_SECRET_FILE) as f:
+                    return f.read().strip()
+            except FileNotFoundError:
+                pass
         return secret
 
 SECRET = _load_secret()

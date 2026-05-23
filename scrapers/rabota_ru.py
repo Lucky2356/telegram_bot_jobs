@@ -55,7 +55,7 @@ class RabotaRuScraper(BaseScraper):
 
             if not href.startswith("http"):
                 from urllib.parse import urljoin
-                href = urljoin("https://rabota.ru", href)
+                href = urljoin("https://www.rabota.ru", href)
 
             title = link_tag.get_text(strip=True) or link_tag.get("title", "")
             if not title:

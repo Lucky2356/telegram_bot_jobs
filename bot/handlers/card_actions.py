@@ -31,13 +31,22 @@ async def on_vacancy_block(callback: CallbackQuery, db: Database):
         return
     vacancy_id = int(parts[0])
     user = await db.get_or_create_user(callback.from_user.id)
-    from core.database.models import Vacancy
+    from core.database.models import Vacancy, Blocklist
     from sqlalchemy import select
     async with db.session_factory() as session:
         result = await session.execute(select(Vacancy).where(Vacancy.id == vacancy_id))
         vac = result.scalar_one_or_none()
         if vac and vac.company:
-            await db.add_blocklist(user.id, vac.company, "company")
+            exists = await session.execute(
+                select(Blocklist).where(
+                    Blocklist.user_id == user.id,
+                    Blocklist.pattern == vac.company,
+                    Blocklist.type == "company",
+                )
+            )
+            if exists.scalar_one_or_none() is None:
+                session.add(Blocklist(user_id=user.id, pattern=vac.company, type="company"))
+                await session.commit()
     await callback.answer("🚫 Компания добавлена в блок-лист!")
 
 

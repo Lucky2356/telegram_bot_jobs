@@ -5,6 +5,7 @@ import logging
 import uvicorn
 from pydantic import BaseModel
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -75,6 +76,12 @@ async def _serve_react_or_fallback(app: FastAPI, request: Request, templates: Ji
 def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     app = FastAPI(title="Job Bot Dashboard")
     app.state.db = db
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     templates = Jinja2Templates(directory="web/templates")
 
     # Auth middleware
