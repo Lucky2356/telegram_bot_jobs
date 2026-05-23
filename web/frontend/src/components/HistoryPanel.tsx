@@ -195,8 +195,13 @@ export default function HistoryPanel({ config }: HistoryPanelProps) {
       </div>
 
       {hasMore && (
-        <div ref={sentinelRef} className="py-2 text-center text-xs text-secondary">
-          {loading ? 'Загружаем ещё...' : 'Прокрутите ниже для загрузки'}
+        <div ref={sentinelRef} className="py-4 text-center text-xs text-secondary">
+          {loading ? (
+            <span className="inline-flex items-center gap-2">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-r-transparent" />
+              Загружаем ещё...
+            </span>
+          ) : 'Прокрутите ниже для загрузки'}
         </div>
       )}
     </div>

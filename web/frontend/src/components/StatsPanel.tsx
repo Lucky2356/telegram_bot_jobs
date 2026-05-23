@@ -24,12 +24,12 @@ function cssVar(name: string, fallback: string) {
 }
 
 export default function StatsPanel({ stats }: StatsPanelProps) {
-  const colors = useMemo(() => ({
+  const colors = {
     accent: cssVar('--accent', '#5c73ff'),
     textSecondary: cssVar('--text-secondary', '#8c9bb5'),
     border: cssVar('--border', 'rgba(127, 146, 191, 0.22)'),
     pie: ['#5c73ff', '#4bb8d8', '#31c48d', '#f0b457', '#ef6f89'],
-  }), [])
+  }
 
   const chartOptions = useMemo(() => ({
     responsive: true,
