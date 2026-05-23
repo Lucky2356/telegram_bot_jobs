@@ -256,10 +256,6 @@ class Scheduler:
                 return
 
         vac = await self.db.add_vacancy(vac_data)
-        if vac is None:
-            vac = await self.db.get_vacancy_by_source(vac_data.source, vac_data.source_id)
-            if vac is None:
-                return
 
         if await self.db.is_sent(user.id, vac.id):
             return

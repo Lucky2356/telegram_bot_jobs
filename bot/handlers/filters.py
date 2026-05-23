@@ -6,7 +6,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.exceptions import TelegramBadRequest
 from bot.keyboards import (
     FilterCallback, WizardAction,
-    build_keywords_keyboard, build_keyword_groups_keyboard,
+    build_keyword_groups_keyboard,
     build_keywords_for_group_keyboard,
     build_exclude_keywords_keyboard,
     build_city_keyboard, build_experience_keyboard,

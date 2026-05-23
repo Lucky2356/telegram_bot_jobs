@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timezone
 from sqlalchemy import select, delete, func, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from core.database.models import Base, User, VacancyFilter, Vacancy, SentVacancy, SavedVacancy, Blocklist
 from scrapers.base import VacancyData
@@ -22,7 +23,14 @@ class Database:
             if user is None:
                 user = User(telegram_id=telegram_id, username=username)
                 session.add(user)
-                await session.commit()
+                try:
+                    await session.commit()
+                except IntegrityError:
+                    await session.rollback()
+                    result = await session.execute(select(User).where(User.telegram_id == telegram_id))
+                    user = result.scalar_one_or_none()
+                    if user is None:
+                        raise
                 await session.refresh(user)
             elif username and user.username != username:
                 user.username = username
@@ -202,7 +210,7 @@ class Database:
     async def get_all_active_filters(self) -> list[VacancyFilter]:
         async with self.session_factory() as session:
             result = await session.execute(
-                select(VacancyFilter).where(VacancyFilter.active == True)
+                select(VacancyFilter).where(VacancyFilter.active == True).order_by(VacancyFilter.id)
             )
             return list(result.scalars().all())
 
@@ -223,7 +231,7 @@ class Database:
             )
             existing = result.scalar_one_or_none()
             if existing:
-                return None
+                return existing
             vac = Vacancy(
                 source=data.source,
                 source_id=data.source_id,

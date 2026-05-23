@@ -94,7 +94,8 @@ async def test_add_vacancy_duplicate(db):
     v1 = await db.add_vacancy(data)
     v2 = await db.add_vacancy(data)
     assert v1 is not None
-    assert v2 is None  # duplicate skipped
+    assert v2 is not None
+    assert v2.id == v1.id
 
 
 @pytest.mark.asyncio
