@@ -58,7 +58,8 @@ class HabrCareerScraper(BaseScraper):
                 if not href.startswith("http"):
                     href = "https://career.habr.com" + href
 
-                source_id = (href.split("/")[-1] or href.split("/")[-2]).split("?")[0] if href else href
+                m_id = re.search(r'/vacancies/(\d+)', href)
+                source_id = m_id.group(1) if m_id else href.split("/")[-1].split("?")[0]
 
                 title = ""
                 title_el = card.select_one("[class*=title]")

@@ -59,8 +59,13 @@ class HHScraper(BaseScraper):
         results: list[VacancyData] = []
         max_pages = 3
         base_params = {"text": query, "per_page": 50, "search_field": "name", "order_by": "publication_time"}
-        if city and city in CITY_IDS:
-            base_params["area"] = CITY_IDS[city]
+        if city:
+            import logging
+            logger = logging.getLogger(__name__)
+            if city in CITY_IDS:
+                base_params["area"] = CITY_IDS[city]
+            else:
+                logger.warning("Unrecognized city key for hh.ru: %s, searching all regions", city)
 
         for page in range(max_pages):
             params = {**base_params, "page": page}
@@ -69,6 +74,11 @@ class HHScraper(BaseScraper):
                 resp.raise_for_status()
                 data = resp.json()
             except Exception:
+                break
+
+            if not isinstance(data, dict):
+                logger = logging.getLogger(__name__)
+                logger.warning("hh.ru returned non-dict response: %s", type(data).__name__)
                 break
 
             for item in data.get("items", []):

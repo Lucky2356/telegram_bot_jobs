@@ -14,7 +14,7 @@ def clean_html(text: str | None) -> str:
 def extract_salary_numbers(text: str | None) -> tuple[int | None, int | None]:
     if not text:
         return None, None
-    nums = [int(n.replace(" ", "")) for n in re.findall(r"[\d ]{2,}", text) if n.strip()]
+    nums = [int(n.replace(" ", "")) for n in re.findall(r"\d[\d ]*", text) if n.strip()]
     nums = [n for n in nums if n > 1000]
     if not nums:
         return None, None

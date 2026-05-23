@@ -51,16 +51,17 @@ class SuperJobScraper(BaseScraper):
                         parts.append(f"от {payment_from:,}".replace(",", " "))
                     if payment_to:
                         parts.append(f"до {payment_to:,}".replace(",", " "))
-                    salary_text = " ".join(parts) + f" {currency.upper()}"
+                    salary_text = " ".join(parts) + f" {str(currency or 'rub').upper()}"
 
                 emp_type = None
                 tof = item.get("type_of_work", {})
                 if tof:
                     emp_type = {1: "full", 2: "part", 3: "project", 4: "part", 5: "part", 6: "remote"}.get(tof.get("id"))
 
+                EMPLOYMENT_MAP = {1: "full", 2: "part", 3: "project", 4: "internship"}
                 emp_form = item.get("employment", {})
-                if emp_form and emp_form.get("id") in {1: "full", 2: "part", 3: "project", 4: "internship"}:
-                    emp_type = {1: "full", 2: "part", 3: "project", 4: "internship"}.get(emp_form.get("id"))
+                if emp_form and emp_form.get("id") in EMPLOYMENT_MAP:
+                    emp_type = EMPLOYMENT_MAP.get(emp_form.get("id"))
 
                 exp = None
                 sj_exp = item.get("experience", {})

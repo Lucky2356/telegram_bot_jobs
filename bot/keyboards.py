@@ -150,7 +150,7 @@ KEYWORDS_BY_GROUP: dict[str, dict[str, list[str]]] = {
         "Системный аналитик": ["System Analyst", "Системный аналитик", "Systems Analyst"],
         "Бизнес-аналитик": ["Business Analyst", "Бизнес-аналитик", "BA"],
         "Data Analyst": ["Data Analyst", "Аналитик данных"],
-        "BI-аналитик": ["BI Analyts", "BI-аналитик", "Power BI", "Tableau"],
+        "BI-аналитик": ["BI Analyst", "BI-аналитик", "Power BI", "Tableau"],
         "Продуктовый аналитик": ["Product Analyst", "Продуктовый аналитик"],
         "Web-аналитик": ["Web Analyst", "Веб-аналитик", "Google Analytics", "Яндекс Метрика"],
     },

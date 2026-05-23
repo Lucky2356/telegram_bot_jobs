@@ -19,7 +19,7 @@ class TrudvsemScraper(BaseScraper):
         query = " ".join(keywords)
         results: list[VacancyData] = []
 
-        for page in range(1):
+        for page in range(3):
             params: dict = {"keyword": query, "offset": page * 100, "limit": 100}
             if city:
                 params["region"] = CITIES.get(city, city)

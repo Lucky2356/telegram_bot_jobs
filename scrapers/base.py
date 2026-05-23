@@ -26,3 +26,8 @@ class BaseScraper(ABC):
         self, keywords: list[str], city: str | None = None
     ) -> list[VacancyData]:
         pass
+
+    @abstractmethod
+    async def close(self):
+        """Close any network sessions, cleanup resources."""
+        pass
