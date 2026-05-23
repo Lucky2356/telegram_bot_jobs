@@ -123,7 +123,7 @@ class TrudvsemScraper(BaseScraper):
 
                     results.append(VacancyData(
                         source="trudvsem",
-                        source_id=v.get("id", vac_url or ""),
+                        source_id=v.get("id", vac_url) or vac_url or "trudvsem_unknown",
                         title=v.get("job-name", ""),
                         company=company_name,
                         salary_text=salary_text,

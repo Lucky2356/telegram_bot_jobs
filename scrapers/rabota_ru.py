@@ -103,6 +103,7 @@ class RabotaRuScraper(BaseScraper):
             emp_type = None
             exp_value = None
             desc_value = None
+            published = None
             if card:
                 card_text = card.get_text(" ", strip=True)
                 emp_type = self._detect_employment_type(card_text)
@@ -110,6 +111,13 @@ class RabotaRuScraper(BaseScraper):
                 desc_el = card.select_one("[class*=description]") or card.select_one("[class*=desc]") or card.select_one("[data-qa*=vacancy-description]")
                 if desc_el:
                     desc_value = clean_html(desc_el.get_text(strip=True))
+                date_el = card.select_one("[class*=date]") or card.select_one("[class*=published]") or card.select_one("time[datetime]") or card.select_one("[data-qa*=vacancy-date]")
+                if date_el:
+                    date_str = date_el.get("datetime") or date_el.get_text(strip=True)
+                    try:
+                        published = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                    except (ValueError, TypeError):
+                        pass
 
             results.append(VacancyData(
                 source="rabota",
@@ -124,6 +132,7 @@ class RabotaRuScraper(BaseScraper):
                 city=city_name,
                 description=desc_value,
                 url=href,
+                published_at=published,
             ))
 
         return results

@@ -109,14 +109,21 @@ class HabrCareerScraper(BaseScraper):
                     parts = meta_text.split("•")
                     if parts:
                         candidate = parts[0].strip()
-                        if not any(k in candidate.lower() for k in _emp_type_kw):
+                        is_emp = any(k in candidate.lower() for k in _emp_type_kw)
+                        if not is_emp:
                             city_name = candidate
+                        else:
+                            for key, val in _emp_type_kw.items():
+                                if key in candidate.lower():
+                                    emp_type = val
+                                    break
                     if len(parts) > 1:
                         for part in parts[1:]:
                             p = part.strip().lower()
                             for key, val in _emp_type_kw.items():
                                 if key in p:
-                                    emp_type = val
+                                    if emp_type is None:
+                                        emp_type = val
                                     break
                             if emp_type:
                                 break
@@ -133,9 +140,32 @@ class HabrCareerScraper(BaseScraper):
                             if years <= 1: exp_value = "1-3"
                             elif years <= 3: exp_value = "3-6"
                             else: exp_value = "6+"
+                if exp_value is None and len(parts) > 1:
+                    for part in parts[1:]:
+                        p = part.strip().lower()
+                        if "без опыта" in p and not re.search(r'\d+\s*(?:года|лет|год)', p):
+                            exp_value = "no"
+                            break
+                        elif "опыт" in p:
+                            exp_years = re.findall(r'(\d+)\s*(?:года|лет|год)', p)
+                            if exp_years:
+                                years = int(exp_years[0])
+                                if years <= 1: exp_value = "1-3"
+                                elif years <= 3: exp_value = "3-6"
+                                else: exp_value = "6+"
+                                break
 
                 skils = card.select_one("div.vacancy-card__skills")
                 desc = skils.get_text(", ", strip=True) if skils else None
+
+                published = None
+                date_el = card.select_one("time[datetime]") or card.select_one("[class*=date]") or card.select_one("[class*=published]")
+                if date_el:
+                    date_str = date_el.get("datetime") or date_el.get_text(strip=True)
+                    try:
+                        published = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                    except (ValueError, TypeError):
+                        pass
 
                 results.append(VacancyData(
                     source="habr",
@@ -150,6 +180,7 @@ class HabrCareerScraper(BaseScraper):
                     city=city_name,
                     description=desc,
                     url=href,
+                    published_at=published,
                 ))
             except Exception:
                 continue
