@@ -47,7 +47,7 @@ export default function Toast() {
       {items.map((item) => (
         <div
           key={item.id}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-lg rounded-xl px-4 py-3 text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2.5 min-w-[280px]"
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-lg rounded-xl px-4 py-3 text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2.5 min-w-[280px] max-w-[calc(100vw-32px)]"
           role="alert"
         >
           {iconMap[item.type]}

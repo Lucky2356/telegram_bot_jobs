@@ -161,7 +161,7 @@ export default function VacancyDetail({ vacancy, config, onClose, onSaved }: Vac
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-white dark:bg-slate-900 flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-200 dark:border-slate-800">
+        <div className="sticky bottom-0 bg-white dark:bg-slate-900 flex items-center justify-end gap-2 px-4 md:px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex-wrap">
           <button
             onClick={handleSave}
             disabled={saving}

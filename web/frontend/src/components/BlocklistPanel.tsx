@@ -41,7 +41,7 @@ export default function BlocklistPanel({ items, onRefresh }: BlocklistPanelProps
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
         <input
           type="text"
           value={pattern}
@@ -53,7 +53,7 @@ export default function BlocklistPanel({ items, onRefresh }: BlocklistPanelProps
         <select
           value={blockType}
           onChange={(e) => setBlockType(e.target.value as 'company' | 'keyword')}
-          className="h-9 px-3 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+          className="h-9 px-3 text-sm border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors sm:w-auto"
           aria-label="Тип блокировки"
         >
           <option value="company">🏢 Компания</option>
@@ -62,7 +62,7 @@ export default function BlocklistPanel({ items, onRefresh }: BlocklistPanelProps
         <button
           onClick={handleAdd}
           disabled={adding || !pattern.trim()}
-          className="flex items-center gap-1 h-9 px-4 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer whitespace-nowrap"
+          className="flex items-center justify-center gap-1 h-9 px-4 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer whitespace-nowrap sm:w-auto"
         >
           <Plus className="w-3.5 h-3.5" />
         </button>

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from aiogram import Router, F
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery
@@ -235,16 +236,21 @@ async def cmd_resume(message: Message, db: Database):
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.CHECK_NOW))
 async def on_check_now(callback: CallbackQuery, scheduler: Scheduler):
+    if not scheduler:
+        await _safe_edit(callback.message, text="❌ Шедулер не доступен.")
+        await callback.answer()
+        return
     await _safe_edit(callback.message, text="🔍 Проверяю вакансии...")
-    if scheduler:
+    try:
         asyncio.create_task(scheduler.run_check())
         await callback.message.answer(
             "✅ Проверка запущена!",
             reply_markup=build_start_keyboard(),
         )
-    else:
+    except Exception as e:
+        logging.getLogger(__name__).error("Failed to run check: %s", e, exc_info=True)
         await callback.message.answer(
-            "❌ Шедулер не доступен.",
+            "❌ Ошибка запуска проверки.",
             reply_markup=build_start_keyboard(),
         )
     await callback.answer()

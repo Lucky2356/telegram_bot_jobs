@@ -208,7 +208,7 @@ function AuthenticatedApp() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-56 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+      <aside className="hidden md:flex flex-col w-48 lg:w-56 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <div className="p-4 border-b border-slate-200 dark:border-slate-800">
           <h1 className="text-lg font-bold text-slate-950 dark:text-white tracking-tight">Job Bot</h1>
         </div>

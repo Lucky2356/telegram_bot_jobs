@@ -17,7 +17,7 @@ type SortKey = 'date-desc' | 'date-asc' | 'salary-desc' | 'salary-asc'
 
 function SkeletonGrid() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
           <div className="flex gap-2 mb-3">
@@ -190,7 +190,7 @@ export default function ResultsPanel({
                     <span>{site}</span>
                     <span className="text-slate-300 dark:text-slate-600 font-normal">{siteItems.length}</span>
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                     {siteItems.map((v, idx) => (
                       <div key={`${v.source}-${v.url}`} className="animate-fade-in" style={{ animationDelay: `${idx * 20}ms` }}>
                         <VacancyCard vacancy={v} config={config} onDetail={setDetailVacancy} />
@@ -201,7 +201,7 @@ export default function ResultsPanel({
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
               {processed.map((v, idx) => (
                 <div key={`${v.source}-${v.url}`} className="animate-fade-in" style={{ animationDelay: `${idx * 15}ms` }}>
                   <VacancyCard vacancy={v} config={config} onDetail={setDetailVacancy} />

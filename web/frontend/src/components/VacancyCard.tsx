@@ -149,7 +149,7 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
         <div className="flex-1" />
 
         {showActions && (
-          <div className="flex items-center gap-2 mt-2 pt-2.5 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2 mt-2 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex-wrap">
             <a
               href={vacancy.url}
               target="_blank"

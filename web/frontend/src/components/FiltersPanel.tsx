@@ -62,7 +62,7 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
 
   return (
     <>
-      {filters.length > 5 && (
+      {(filters.length > 5 || true) && (
         <input
           type="text"
           value={search}
@@ -102,12 +102,12 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
             <span className={`w-1.5 h-1.5 rounded-full ${f.active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
             <span className={!f.active ? 'line-through' : ''}>{f.name}</span>
 
-            <div className="hidden group-hover:flex items-center gap-0.5 ml-1">
+            <div className="flex md:group-hover:flex items-center gap-0.5 ml-1">
               {f.active && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleCheckOne(f.id) }}
                   disabled={checkingId === f.id}
-                  className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-emerald-500 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
+                  className="w-7 h-7 flex items-center justify-center text-xs rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-emerald-500 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
                   aria-label={`Проверить фильтр ${f.name}`}
                 >
                   {checkingId === f.id ? '⏳' : '▶'}
@@ -115,28 +115,28 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
               )}
               <button
                 onClick={(e) => { e.stopPropagation(); handleToggle(f.id) }}
-                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-blue-600 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
+                className="w-7 h-7 flex items-center justify-center text-xs rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-blue-600 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
                 aria-label={f.active ? 'Выключить' : 'Включить'}
               >
                 {f.active ? '⏸' : '▶️'}
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); handleClone(f.id) }}
-                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-blue-600 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
+                className="w-7 h-7 flex items-center justify-center text-xs rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-blue-600 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
                 aria-label="Клонировать"
               >
                 📋
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setEditFilter(f) }}
-                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-blue-600 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
+                className="w-7 h-7 flex items-center justify-center text-xs rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-blue-600 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
                 aria-label="Редактировать"
               >
                 ✏️
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setDeleteConfirm(f.id) }}
-                className="w-5 h-5 flex items-center justify-center text-[10px] rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-red-500 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
+                className="w-7 h-7 flex items-center justify-center text-xs rounded bg-white dark:bg-slate-700 text-slate-500 hover:text-red-500 cursor-pointer shadow-sm border border-slate-200 dark:border-slate-600"
                 aria-label="Удалить"
               >
                 🗑
