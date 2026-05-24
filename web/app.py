@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 import logging
+from collections import defaultdict, deque
+from time import monotonic
 import uvicorn
 from pydantic import BaseModel
 from fastapi import FastAPI, Request
@@ -21,6 +23,13 @@ from utils.text_cleaner import clean_html
 REACT_BUILD_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 
 
+def _parse_cors_origins() -> list[str]:
+    raw_origins = settings.WEB_CORS_ORIGINS.strip()
+    if not raw_origins or raw_origins == "*":
+        return ["*"]
+    return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+
+
 class BlocklistAdd(BaseModel):
     pattern: str
     type: str = "company"
@@ -36,6 +45,50 @@ class FilterUpdate(BaseModel):
     sites: list[str]
     experience: str | None = None
     exclude_keywords: list[str] = []
+
+
+def _clean_unique(values: list[str]) -> list[str]:
+    cleaned = [value.strip() for value in values if value and value.strip()]
+    return list(dict.fromkeys(cleaned))
+
+
+def _normalize_filter_payload(data: FilterUpdate) -> tuple[dict | None, JSONResponse | None]:
+    keywords = _clean_unique(data.keywords)
+    exclude_keywords = _clean_unique(data.exclude_keywords)
+    sites = _clean_unique(data.sites) or list(SITES.keys())
+    employment_types = _clean_unique(data.employment_types)
+    name = data.name.strip()
+    valid_sites = set(SITES)
+    valid_employment = set(EMPLOYMENT_TYPES)
+
+    if not name:
+        return None, JSONResponse({"ok": False, "message": "Введите название фильтра"}, status_code=400)
+    if not keywords:
+        return None, JSONResponse({"ok": False, "message": "Выберите или введите ключевые слова"}, status_code=400)
+    if any(site not in valid_sites for site in sites):
+        return None, JSONResponse({"ok": False, "message": "Неизвестный источник вакансий"}, status_code=400)
+    if data.city is not None and data.city not in CITIES:
+        return None, JSONResponse({"ok": False, "message": "Неизвестный город"}, status_code=400)
+    if data.experience is not None and data.experience not in EXPERIENCE:
+        return None, JSONResponse({"ok": False, "message": "Неизвестный опыт работы"}, status_code=400)
+    if any(emp not in valid_employment for emp in employment_types):
+        return None, JSONResponse({"ok": False, "message": "Неизвестный тип занятости"}, status_code=400)
+    if data.salary_min is not None and data.salary_max is not None and data.salary_min > data.salary_max:
+        return None, JSONResponse({"ok": False, "message": "Минимальная зарплата не может быть больше максимальной"}, status_code=400)
+    if (data.salary_min is not None and data.salary_min < 0) or (data.salary_max is not None and data.salary_max < 0):
+        return None, JSONResponse({"ok": False, "message": "Зарплата не может быть отрицательной"}, status_code=400)
+
+    return {
+        "name": name,
+        "keywords": keywords,
+        "city": data.city,
+        "salary_min": data.salary_min,
+        "salary_max": data.salary_max,
+        "employment_types": employment_types,
+        "sites": sites,
+        "exclude_keywords": exclude_keywords,
+        "experience": data.experience,
+    }, None
 
 
 async def _get_first_user(db: Database):
@@ -76,13 +129,46 @@ async def _serve_react_or_fallback(app: FastAPI, request: Request, templates: Ji
 def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     app = FastAPI(title="Job Bot Dashboard")
     app.state.db = db
+    rate_buckets = defaultdict(deque)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=_parse_cors_origins(),
         allow_methods=["*"],
         allow_headers=["*"],
     )
     templates = Jinja2Templates(directory="web/templates")
+
+    def _client_ip(request: Request) -> str:
+        forwarded_for = request.headers.get("x-forwarded-for")
+        if forwarded_for:
+            return forwarded_for.split(",", 1)[0].strip()
+        return request.client.host if request.client else "unknown"
+
+    def _is_rate_limited(key: str, limit: int) -> bool:
+        if limit <= 0:
+            return False
+        now = monotonic()
+        window = max(1, settings.WEB_RATE_LIMIT_WINDOW_SECONDS)
+        bucket = rate_buckets[key]
+        while bucket and now - bucket[0] > window:
+            bucket.popleft()
+        if len(bucket) >= limit:
+            return True
+        bucket.append(now)
+        return False
+
+    def _rate_limit_response() -> JSONResponse:
+        return JSONResponse({"ok": False, "message": "Too many requests"}, status_code=429)
+
+    @app.middleware("http")
+    async def static_cache_middleware(request: Request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if path.startswith("/assets/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif path == "/" or path.endswith(".html"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
     # Auth middleware
     if settings.WEB_PASSWORD:
@@ -90,7 +176,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
         async def auth_middleware(request: Request, call_next):
             path = request.url.path
             EXCLUDED_PREFIXES = ("/api/auth/", "/api/events")
-            if path.startswith("/api/") and not path.startswith(EXCLUDED_PREFIXES):
+            EXCLUDED_PATHS = {"/api/health"}
+            if path.startswith("/api/") and path not in EXCLUDED_PATHS and not path.startswith(EXCLUDED_PREFIXES):
                 auth = request.headers.get("Authorization", "")
                 if not auth.startswith("Bearer ") or not verify_token(auth[7:]):
                     return HTMLResponse(
@@ -113,7 +200,9 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
         password: str
 
     @app.post("/api/auth/login")
-    async def api_login(data: LoginData):
+    async def api_login(data: LoginData, request: Request):
+        if _is_rate_limited(f"login:{_client_ip(request)}", settings.WEB_LOGIN_RATE_LIMIT):
+            return _rate_limit_response()
         if settings.WEB_PASSWORD and data.password == settings.WEB_PASSWORD:
             return {"ok": True, "token": create_token()}
         if not settings.WEB_PASSWORD:
@@ -129,6 +218,14 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             "experiences": EXPERIENCE,
             "salaries": SALARIES,
             "keyword_groups": KEYWORDS_BY_GROUP,
+        }
+
+    @app.get("/api/health")
+    async def api_health():
+        return {
+            "ok": True,
+            "scheduler": bool(scheduler),
+            "checking": scheduler.is_checking if scheduler else False,
         }
 
     @app.get("/api/stats")
@@ -156,18 +253,13 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.post("/api/filters")
     async def api_create_filter(data: FilterUpdate):
+        payload, error = _normalize_filter_payload(data)
+        if error:
+            return error
         user = await _get_first_user(db)
         vf = await db.create_filter(
             user_id=user.id,
-            name=data.name,
-            keywords=data.keywords,
-            city=data.city,
-            salary_min=data.salary_min,
-            salary_max=data.salary_max,
-            employment_types=data.employment_types,
-            sites=data.sites,
-            exclude_keywords=data.exclude_keywords,
-            experience=data.experience,
+            **payload,
         )
         return {"ok": True, "filter": {
             "id": vf.id,
@@ -224,17 +316,12 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.put("/api/filters/{filter_id}")
     async def api_update_filter(filter_id: int, data: FilterUpdate):
+        payload, error = _normalize_filter_payload(data)
+        if error:
+            return error
         vf = await db.update_filter(
             filter_id=filter_id,
-            name=data.name,
-            keywords=data.keywords,
-            city=data.city,
-            salary_min=data.salary_min,
-            salary_max=data.salary_max,
-            employment_types=data.employment_types,
-            sites=data.sites,
-            exclude_keywords=data.exclude_keywords,
-            experience=data.experience,
+            **payload,
         )
         if vf is None:
             return JSONResponse({"ok": False, "message": "Filter not found"}, status_code=404)
@@ -254,11 +341,13 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.post("/api/filters/{filter_id}/toggle")
     async def api_toggle(filter_id: int):
+        user = await _get_first_user(db)
+        vf = await db.get_filter(filter_id)
+        if vf is None:
+            return JSONResponse({"ok": False, "message": "Filter not found"}, status_code=404)
+        if vf.user_id != user.id:
+            return JSONResponse({"ok": False, "message": "Forbidden"}, status_code=403)
         active = await db.toggle_filter(filter_id)
-        if active is False:
-            vf = await db.get_filter(filter_id)
-            if vf is None:
-                return JSONResponse({"ok": False, "message": "Filter not found"}, status_code=404)
         return {"ok": True, "active": active}
 
     @app.post("/api/filters/{filter_id}/clone")
@@ -267,6 +356,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
         if vf is None:
             return JSONResponse({"ok": False, "message": "Filter not found"}, status_code=404)
         user = await _get_first_user(db)
+        if vf.user_id != user.id:
+            return JSONResponse({"ok": False, "message": "Forbidden"}, status_code=403)
         cloned = await db.create_filter(
             user_id=user.id,
             name=f"Копия — {vf.name}",
@@ -295,6 +386,12 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.delete("/api/filters/{filter_id}")
     async def api_delete(filter_id: int):
+        user = await _get_first_user(db)
+        vf = await db.get_filter(filter_id)
+        if vf is None:
+            return JSONResponse({"ok": False, "message": "Filter not found"}, status_code=404)
+        if vf.user_id != user.id:
+            return JSONResponse({"ok": False, "message": "Forbidden"}, status_code=403)
         await db.delete_filter(filter_id)
         return {"ok": True}
 
@@ -320,14 +417,24 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             logging.getLogger(__name__).error("Background task '%s' failed: %s", name, e, exc_info=True)
 
     @app.post("/api/check_now")
-    async def api_check_now():
+    async def api_check_now(request: Request):
+        if _is_rate_limited(f"check_all:{_client_ip(request)}", settings.WEB_ACTION_RATE_LIMIT):
+            return _rate_limit_response()
         if scheduler:
             asyncio.create_task(_run_task(scheduler.run_check(), "check_all"))
             return {"ok": True, "message": "Проверка запущена!"}
         return {"ok": False, "message": "Scheduler not available"}
 
     @app.post("/api/filters/{filter_id}/check")
-    async def api_check_filter(filter_id: int):
+    async def api_check_filter(filter_id: int, request: Request):
+        if _is_rate_limited(f"check_filter:{_client_ip(request)}", settings.WEB_ACTION_RATE_LIMIT):
+            return _rate_limit_response()
+        user = await _get_first_user(db)
+        vf = await db.get_filter(filter_id)
+        if vf is None:
+            return JSONResponse({"ok": False, "message": "Filter not found"}, status_code=404)
+        if vf.user_id != user.id:
+            return JSONResponse({"ok": False, "message": "Forbidden"}, status_code=403)
         if scheduler:
             asyncio.create_task(_run_task(scheduler.run_check_for_filter(filter_id), f"check_filter_{filter_id}"))
             return {"ok": True, "message": "Проверка фильтра запущена!"}
@@ -374,8 +481,13 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.post("/api/blocklist/add")
     async def api_blocklist_add(data: BlocklistAdd):
+        pattern = data.pattern.strip()
+        if not pattern:
+            return JSONResponse({"ok": False, "message": "Pattern is required"}, status_code=400)
+        if data.type not in {"company", "keyword"}:
+            return JSONResponse({"ok": False, "message": "Invalid blocklist type"}, status_code=400)
         user = await _get_first_user(db)
-        await db.add_blocklist(user.id, data.pattern, data.type)
+        await db.add_blocklist(user.id, pattern, data.type)
         return {"ok": True}
 
     @app.post("/api/vacancies/{vacancy_id}/save")
@@ -437,6 +549,8 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
 
     @app.get("/api/history")
     async def api_history(page: int = 1, limit: int = 20):
+        page = max(1, page)
+        limit = max(1, min(limit, 100))
         offset_val = (page - 1) * limit
         history = await db.get_recent_sent(limit=limit, offset=offset_val)
         return {
@@ -459,7 +573,7 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     return app
 
 
-async def run_web(db: Database, scheduler: Scheduler | None = None):
+async def run_web(db: Database, scheduler: Scheduler | None = None, shutdown_event: asyncio.Event | None = None):
     app = create_web_app(db, scheduler)
     config = uvicorn.Config(
         app,
@@ -468,4 +582,16 @@ async def run_web(db: Database, scheduler: Scheduler | None = None):
         log_level="info",
     )
     server = uvicorn.Server(config)
-    await server.serve()
+    shutdown_task = None
+    if shutdown_event is not None:
+        async def _watch_shutdown():
+            await shutdown_event.wait()
+            server.should_exit = True
+
+        shutdown_task = asyncio.create_task(_watch_shutdown())
+    try:
+        await server.serve()
+    finally:
+        if shutdown_task is not None:
+            shutdown_task.cancel()
+            await asyncio.gather(shutdown_task, return_exceptions=True)

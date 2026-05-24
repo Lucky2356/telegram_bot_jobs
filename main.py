@@ -25,6 +25,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _wait_safely(coro, timeout: float, label: str):
+    try:
+        return await asyncio.wait_for(coro, timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.warning("%s did not finish in %.1f seconds", label, timeout)
+    except Exception as e:
+        logger.warning("%s failed during shutdown: %s", label, e)
+
+
+async def _cancel_tasks(tasks: list[asyncio.Task], timeout: float = 5.0):
+    pending = [task for task in tasks if not task.done()]
+    if not pending:
+        return
+    for task in pending:
+        task.cancel()
+    try:
+        await asyncio.wait_for(asyncio.gather(*pending, return_exceptions=True), timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.warning("Some background tasks did not stop in %.1f seconds", timeout)
+
+
 async def main():
     sys.stdout.reconfigure(encoding="utf-8")
     print("=== Job Bot Starting ===", flush=True)
@@ -77,26 +98,45 @@ async def main():
     logger.info("DB cleanup scheduled daily at 03:00")
 
     logger.info("Starting Telegram bot polling...")
+    shutdown_event = asyncio.Event()
+    service_tasks: list[asyncio.Task] = []
     try:
-        await asyncio.gather(
-            dp.start_polling(bot),
-            run_web(db, scheduler_obj),
-            return_exceptions=True,
-        )
+        service_tasks = [
+            asyncio.create_task(
+                dp.start_polling(
+                    bot,
+                    polling_timeout=5,
+                    handle_signals=False,
+                    close_bot_session=False,
+                ),
+                name="telegram_polling",
+            ),
+            asyncio.create_task(
+                run_web(db, scheduler_obj, shutdown_event=shutdown_event),
+                name="web_server",
+            ),
+        ]
+        done, _ = await asyncio.wait(service_tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            if task.cancelled():
+                continue
+            exc = task.exception()
+            if exc is not None:
+                raise exc
     except (asyncio.CancelledError, KeyboardInterrupt):
-        pass
+        logger.info("Stop signal received")
     finally:
         logger.info("Shutting down...")
-        aps.shutdown(wait=False)
-        await scheduler_obj.close()
+        shutdown_event.set()
         try:
-            await bot.session.close()
-        except Exception:
-            pass
-        try:
-            await db.engine.dispose()
-        except Exception:
-            pass
+            aps.shutdown(wait=False)
+        except Exception as e:
+            logger.warning("APScheduler shutdown failed: %s", e)
+        await _wait_safely(dp.stop_polling(), 3.0, "Telegram polling stop")
+        await _cancel_tasks(service_tasks)
+        await _wait_safely(scheduler_obj.close(), 5.0, "Scrapers shutdown")
+        await _wait_safely(bot.session.close(), 5.0, "Telegram session close")
+        await _wait_safely(db.engine.dispose(), 5.0, "Database engine dispose")
         logger.info("Bye!")
 
 

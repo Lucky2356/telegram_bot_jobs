@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Copy, Pencil, Play, Power, Trash2, Search } from 'lucide-react'
+import { Copy, Pencil, Play, Plus, Power, Trash2, Search } from 'lucide-react'
 import type { VacancyFilter, AppConfig } from '../types'
 import { api } from '../api'
 import { toast } from './toastBus'
@@ -12,9 +12,19 @@ interface FiltersPanelProps {
   selectedId: number | null
   onSelect: (id: number | null) => void
   onRefresh: () => void
+  onCreate: () => void
+  onSavedFilter: (filter: VacancyFilter) => void
 }
 
-export default function FiltersPanel({ filters, config, selectedId, onSelect, onRefresh }: FiltersPanelProps) {
+export default function FiltersPanel({
+  filters,
+  config,
+  selectedId,
+  onSelect,
+  onRefresh,
+  onCreate,
+  onSavedFilter,
+}: FiltersPanelProps) {
   const [editFilter, setEditFilter] = useState<VacancyFilter | null>(null)
   const [checkingId, setCheckingId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
@@ -36,6 +46,7 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
   }
 
   const handleCheckOne = async (id: number) => {
+    onSelect(id)
     setCheckingId(id)
     try {
       await api.checkFilter(id)
@@ -60,9 +71,17 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
 
   if (filters.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-[var(--border)] bg-[color:var(--surface-elevated)] p-6 text-center">
+      <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[color:var(--surface-elevated)] p-6 text-center">
         <p className="text-sm font-medium text-primary">Фильтров ещё нет</p>
         <p className="mt-1 text-xs text-secondary">Создайте первый фильтр и запустите проверку вакансий.</p>
+        <button
+          type="button"
+          onClick={onCreate}
+          className="focus-ring mt-4 inline-flex h-10 max-w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)]"
+        >
+          <Plus className="h-4 w-4 shrink-0" />
+          <span className="btn-text">Создать фильтр</span>
+        </button>
       </div>
     )
   }
@@ -70,6 +89,15 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
   return (
     <>
       <div className="space-y-3">
+        <button
+          type="button"
+          onClick={onCreate}
+          className="focus-ring inline-flex h-10 w-full max-w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)]"
+        >
+          <Plus className="h-4 w-4 shrink-0" />
+          <span className="btn-text">Новый фильтр</span>
+        </button>
+
         {filters.length > 0 && (
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
@@ -86,7 +114,7 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
 
         <button
           onClick={() => onSelect(null)}
-          className={`focus-ring inline-flex h-10 items-center rounded-xl border px-3 text-sm font-medium transition ${
+          className={`focus-ring inline-flex h-10 items-center rounded-2xl border px-3 text-sm font-medium transition ${
             selectedId === null
               ? 'border-[var(--border-strong)] bg-[var(--accent-soft)] text-primary'
               : 'border-[var(--border)] bg-[color:var(--surface-elevated)] text-secondary hover:text-primary'
@@ -99,7 +127,7 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
           {filtered.map((f) => (
             <div
               key={f.id}
-              className={`rounded-xl border p-3 transition ${
+              className={`rounded-2xl border p-3 transition ${
                 selectedId === f.id
                   ? 'border-[var(--border-strong)] bg-[var(--accent-soft)]'
                   : 'border-[var(--border)] bg-[color:var(--surface-elevated)]'
@@ -168,7 +196,10 @@ export default function FiltersPanel({ filters, config, selectedId, onSelect, on
           config={config}
           filter={editFilter}
           onClose={() => setEditFilter(null)}
-          onSaved={onRefresh}
+          onSaved={(saved) => {
+            setEditFilter(null)
+            onSavedFilter(saved)
+          }}
         />
       )}
 

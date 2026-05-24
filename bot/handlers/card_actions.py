@@ -1,6 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
+from html import escape
 from bot.keyboards import (
     FilterCallback, WizardAction,
 )
@@ -8,6 +9,10 @@ from bot.handlers.filters import FilterWizard
 from core.database.repository import Database
 
 router = Router()
+
+
+def _h(value) -> str:
+    return escape("" if value is None else str(value), quote=False)
 
 
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.VAC_SAVE))
@@ -80,8 +85,8 @@ async def on_vacancy_similar(callback: CallbackQuery, state: FSMContext, db: Dat
     )
     await state.set_state(FilterWizard.confirm)
 
-    lines = [f"📋 <b>Фильтр из вакансии:</b>"]
-    lines.append(f"<b>Ключевые слова:</b> {', '.join(keywords)}")
+    lines = ["📋 <b>Фильтр из вакансии:</b>"]
+    lines.append(f"<b>Ключевые слова:</b> {', '.join(_h(k) for k in keywords)}")
     lines.append("<b>Город:</b> Любой")
     lines.append("<b>Зарплата:</b> Любая")
     lines.append("<b>Сайты:</b> Все")

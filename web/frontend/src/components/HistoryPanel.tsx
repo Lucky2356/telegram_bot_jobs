@@ -144,7 +144,7 @@ export default function HistoryPanel({ config }: HistoryPanelProps) {
       </div>
 
       {filtered.length === 0 && (
-        <div className="rounded-xl border border-dashed border-[var(--border)] bg-[color:var(--surface-elevated)] p-8 text-center">
+        <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[color:var(--surface-elevated)] p-8 text-center">
           <p className="text-base font-medium text-primary">История пока пустая</p>
           <p className="mt-2 text-sm text-secondary">Запустите проверку и дождитесь отправки вакансий в Telegram.</p>
         </div>
@@ -166,7 +166,7 @@ export default function HistoryPanel({ config }: HistoryPanelProps) {
                 href={item.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group block rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-3 transition hover:border-[var(--border-strong)]"
+                className="group block rounded-2xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-3.5 transition hover:border-[var(--border-strong)]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

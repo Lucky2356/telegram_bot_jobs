@@ -3,7 +3,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from bot.keyboards import build_start_keyboard, FilterCallback, WizardAction, build_keyword_groups_keyboard
+from bot.keyboards import build_start_keyboard, FilterCallback, WizardAction, build_keyword_groups_keyboard, SITES
 from bot.handlers.filters import FilterWizard
 from core.database.repository import Database
 
@@ -76,7 +76,7 @@ async def main_add(callback: CallbackQuery, state: FSMContext):
         salary_min=None,
         salary_max=None,
         employment_types=[],
-        sites=[],
+        sites=list(SITES.keys()),
     )
     await state.set_state(FilterWizard.keywords)
 

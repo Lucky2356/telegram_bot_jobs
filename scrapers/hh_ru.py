@@ -1,12 +1,15 @@
+import re
 import httpx
 from datetime import datetime, timedelta, timezone
+from bs4 import BeautifulSoup
 from scrapers.base import BaseScraper, VacancyData
 from core.config import settings
-from utils.text_cleaner import clean_html
+from utils.text_cleaner import clean_html, extract_salary_numbers
 
 
 HH_API = "https://api.hh.ru/vacancies"
 HH_TOKEN_URL = "https://api.hh.ru/token"
+HH_SEARCH_URL = "https://hh.ru/search/vacancy"
 
 CITY_IDS: dict[str, int] = {
     "moscow": 1, "spb": 2, "kazan": 88, "novosibirsk": 4,
@@ -20,7 +23,10 @@ class HHScraper(BaseScraper):
         self._token_expires: datetime | None = None
         self.client = httpx.AsyncClient(
             timeout=30.0, trust_env=False,
-            headers={"User-Agent": "TelegramJobBot/1.0 (job-bot)"},
+            headers={
+                "User-Agent": settings.HH_USER_AGENT,
+                "HH-User-Agent": settings.HH_USER_AGENT,
+            },
         )
 
     async def close(self):
@@ -144,4 +150,90 @@ class HHScraper(BaseScraper):
                     description=desc, url=item.get("alternate_url", ""), published_at=published,
                 ))
 
+        return results or await self._search_html(query, city)
+
+    async def _search_html(self, query: str, city: str | None = None) -> list[VacancyData]:
+        results: list[VacancyData] = []
+        seen: set[str] = set()
+        base_params: dict = {"text": query, "search_field": "name"}
+        if city and city in CITY_IDS:
+            base_params["area"] = CITY_IDS[city]
+
+        for page in range(3):
+            params = {**base_params, "page": page}
+            try:
+                resp = await self.client.get(HH_SEARCH_URL, params=params)
+                resp.raise_for_status()
+            except Exception:
+                break
+
+            soup = BeautifulSoup(resp.text, "lxml")
+            cards = soup.select('[data-qa="vacancy-serp__vacancy"]')
+            if not cards:
+                break
+
+            for card in cards:
+                title_link = card.select_one('a[data-qa="serp-item__title"]')
+                if not title_link:
+                    continue
+                href = title_link.get("href", "")
+                vacancy_id_match = re.search(r"/vacancy/(\d+)", href)
+                source_id = vacancy_id_match.group(1) if vacancy_id_match else href
+                if not source_id or source_id in seen:
+                    continue
+                seen.add(source_id)
+
+                title = title_link.get_text(" ", strip=True)
+                company_el = (
+                    card.select_one('[data-qa="vacancy-serp__vacancy-employer-text"]')
+                    or card.select_one('[data-qa="vacancy-serp__vacancy-employer"]')
+                )
+                city_el = card.select_one('[data-qa="vacancy-serp__vacancy-address"]')
+                text = card.get_text(" ", strip=True)
+                salary_text = self._extract_html_salary(text)
+                salary_min, salary_max = extract_salary_numbers(salary_text or "")
+
+                results.append(VacancyData(
+                    source="hh",
+                    source_id=source_id,
+                    title=title,
+                    company=company_el.get_text(" ", strip=True) if company_el else None,
+                    salary_text=salary_text,
+                    salary_min=salary_min,
+                    salary_max=salary_max,
+                    employment_type=self._detect_html_employment(text),
+                    experience=self._detect_html_experience(text),
+                    city=city_el.get_text(" ", strip=True) if city_el else None,
+                    description=clean_html(text),
+                    url=href,
+                ))
+
         return results
+
+    def _extract_html_salary(self, text: str) -> str | None:
+        match = re.search(r"(\d[\d\s\u202f]*(?:\s*[–-]\s*\d[\d\s\u202f]*)?\s*₽)", text)
+        if not match:
+            return None
+        return re.sub(r"\s+", " ", match.group(1).replace("\u202f", " ")).strip()
+
+    def _detect_html_employment(self, text: str) -> str | None:
+        text_lower = text.casefold()
+        if "удал" in text_lower or "дистанц" in text_lower:
+            return "remote"
+        if "частич" in text_lower:
+            return "part"
+        if "стаж" in text_lower:
+            return "internship"
+        return None
+
+    def _detect_html_experience(self, text: str) -> str | None:
+        text_lower = text.casefold()
+        if "без опыта" in text_lower:
+            return "no"
+        if "1" in text_lower and "3" in text_lower and "опыт" in text_lower:
+            return "1-3"
+        if "3" in text_lower and "6" in text_lower and "опыт" in text_lower:
+            return "3-6"
+        if "6" in text_lower and "опыт" in text_lower:
+            return "6+"
+        return None

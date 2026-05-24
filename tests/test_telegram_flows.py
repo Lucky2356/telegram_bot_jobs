@@ -179,3 +179,208 @@ async def test_filter_wizard_confirm_creates_filter(db):
     assert filters[0].experience == "1-3"
     assert state.cleared is True
     assert "создан" in callback.message.text
+
+from datetime import datetime, timezone
+
+
+@pytest.mark.asyncio
+async def test_scheduler_rejects_vacancy_outside_salary_range(db):
+    user = await db.get_or_create_user(telegram_id=303)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="Salary bounded",
+        keywords=["Python"],
+        city=None,
+        salary_min=150000,
+        salary_max=250000,
+        employment_types=[],
+        sites=["hh"],
+    )
+    scheduler = Scheduler(db, bot=object())
+
+    too_low = VacancyData(
+        source="hh",
+        source_id="sal-low",
+        title="Python Developer",
+        company="Low Co",
+        salary_text="100 000 ?",
+        salary_min=90000,
+        salary_max=120000,
+        url="https://example.com/low",
+        published_at=datetime.now(timezone.utc),
+    )
+    too_high = VacancyData(
+        source="hh",
+        source_id="sal-high",
+        title="Python Developer",
+        company="High Co",
+        salary_text="400 000 ?",
+        salary_min=300000,
+        salary_max=450000,
+        url="https://example.com/high",
+        published_at=datetime.now(timezone.utc),
+    )
+
+    await scheduler._process_vacancy(too_low, vf, user, ["Python"], [], [], None)
+    await scheduler._process_vacancy(too_high, vf, user, ["Python"], [], [], None)
+
+    assert scheduler._user_buffers.get(user.id) is None
+    assert user.id not in scheduler.last_results
+
+
+@pytest.mark.asyncio
+async def test_scheduler_keeps_vacancy_without_salary_when_filter_has_bounds(db):
+    user = await db.get_or_create_user(telegram_id=404)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="Salary bounded",
+        keywords=["Python"],
+        city=None,
+        salary_min=150000,
+        salary_max=250000,
+        employment_types=[],
+        sites=["hh"],
+    )
+    scheduler = Scheduler(db, bot=object())
+
+    unknown_salary = VacancyData(
+        source="hh",
+        source_id="sal-unknown",
+        title="Python Developer",
+        company="Unknown Co",
+        salary_text=None,
+        salary_min=None,
+        salary_max=None,
+        url="https://example.com/unknown",
+        published_at=datetime.now(timezone.utc),
+    )
+
+    await scheduler._process_vacancy(unknown_salary, vf, user, ["Python"], [], [], None)
+
+    assert user.id in scheduler._user_buffers
+    assert len(scheduler._user_buffers[user.id]) == 1
+    assert user.id in scheduler.last_results
+
+
+class FakeSearchScraper:
+    def __init__(self):
+        self.calls = []
+
+    async def search(self, keywords, city=None):
+        self.calls.append((list(keywords), city))
+        if keywords == ["Программист 1С"]:
+            return [
+                VacancyData(
+                    source="hh",
+                    source_id="one-c",
+                    title="Программист 1С",
+                    company="1C Studio",
+                    url="https://example.com/one-c",
+                    description="Разработка и поддержка конфигураций 1С",
+                )
+            ]
+        return []
+
+    async def close(self):
+        pass
+
+
+@pytest.mark.asyncio
+async def test_scheduler_searches_sites_with_short_synonym_queries_not_joined_string(db):
+    user = await db.get_or_create_user(telegram_id=505)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="1С поиск",
+        keywords=["1С Программист", "Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+    scheduler = Scheduler(db, bot=object())
+    fake_scraper = FakeSearchScraper()
+    scheduler._scrapers["hh"] = fake_scraper
+
+    await scheduler._check_filter(vf, user)
+
+    assert fake_scraper.calls[0] == (["1С Программист"], None)
+    assert (["Программист 1С"], None) in fake_scraper.calls
+    assert all(len(call_keywords) == 1 for call_keywords, _ in fake_scraper.calls)
+    assert len(scheduler._user_buffers[user.id]) == 1
+    assert scheduler.last_results[user.id][0][2].title == "Программист 1С"
+
+
+@pytest.mark.asyncio
+async def test_single_filter_web_check_includes_already_sent_vacancies(db):
+    class AlreadySentScraper:
+        async def search(self, keywords, city=None):
+            return [VacancyData(
+                source="hh",
+                source_id="python-existing",
+                title="Python Developer",
+                company="Good Co",
+                url="https://example.com/python-existing",
+                description="Backend development with Python",
+            )]
+
+        async def close(self):
+            pass
+
+    user = await db.get_or_create_user(telegram_id=606)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="Python search",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+    existing = await db.add_vacancy(VacancyData(
+        source="hh",
+        source_id="python-existing",
+        title="Python Developer",
+        company="Good Co",
+        url="https://example.com/python-existing",
+        description="Backend development with Python",
+    ))
+    await db.mark_sent(user.id, existing.id, filter_id=vf.id)
+
+    scheduler = Scheduler(db, bot=object())
+    scheduler._scrapers["hh"] = AlreadySentScraper()
+
+    await scheduler.run_check_for_filter(vf.id)
+
+    results = scheduler.get_last_results()
+    assert len(results) == 1
+    assert results[0]["id"] == existing.id
+    assert results[0]["filter_id"] == vf.id
+    assert user.id not in scheduler._user_buffers
+
+
+def test_scheduler_matches_russian_phrase_synonyms_without_regex_boundaries(db):
+    scheduler = Scheduler(db, bot=object())
+    vacancy = VacancyData(
+        source="hh",
+        source_id="one-c-match",
+        title="Ученик программиста 1С",
+        company="1C Studio",
+        url="https://example.com/one-c-match",
+    )
+
+    assert scheduler._matches_keywords(vacancy, ["1С Программист", "Программист 1С"]) is True
+
+
+def test_scheduler_matches_one_c_with_latin_and_cyrillic_c(db):
+    scheduler = Scheduler(db, bot=object())
+    vacancy = VacancyData(
+        source="superjob",
+        source_id="one-c-latin",
+        title="Программист 1C",
+        company="1C Studio",
+        url="https://example.com/one-c-latin",
+    )
+
+    assert scheduler._matches_keywords(vacancy, ["1С Программист", "Программист 1С"]) is True

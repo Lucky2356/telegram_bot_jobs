@@ -4,6 +4,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.exceptions import TelegramBadRequest
+from html import escape
 from bot.keyboards import (
     FilterCallback, WizardAction,
     build_keyword_groups_keyboard,
@@ -20,6 +21,10 @@ from bot.keyboards import (
 from core.database.repository import Database
 
 router = Router()
+
+
+def _h(value) -> str:
+    return escape("" if value is None else str(value), quote=False)
 
 
 async def _safe_edit(msg, text=None, reply_markup=None, **kwargs):
@@ -58,7 +63,7 @@ async def cmd_add_filter(message: Message, state: FSMContext):
         salary_min=None,
         salary_max=None,
         employment_types=[],
-        sites=[],
+        sites=list(SITES.keys()),
     )
     await state.set_state(FilterWizard.keywords)
     await message.answer(
@@ -415,13 +420,13 @@ async def on_site_done(callback: CallbackQuery, state: FSMContext):
     await state.update_data(filter_name=name)
     await state.set_state(FilterWizard.confirm)
 
-    lines = [f"📋 <b>Имя:</b> {name}"]
-    lines.append(f"<b>Ключевые слова:</b> {', '.join(kws)}")
+    lines = [f"📋 <b>Имя:</b> {_h(name)}"]
+    lines.append(f"<b>Ключевые слова:</b> {', '.join(_h(k) for k in kws)}")
     excluded = data.get("excluded_keywords", [])
     if excluded:
-        lines.append(f"<b>Исключить:</b> {', '.join(excluded)}")
+        lines.append(f"<b>Исключить:</b> {', '.join(_h(k) for k in excluded)}")
     city = data.get("city")
-    lines.append(f"<b>Город:</b> {city or 'Любой'}")
+    lines.append(f"<b>Город:</b> {_h(city or 'Любой')}")
     if data.get("salary_min") is not None or data.get("salary_max") is not None:
         parts = []
         if data.get("salary_min"):
@@ -433,10 +438,10 @@ async def on_site_done(callback: CallbackQuery, state: FSMContext):
         lines.append("<b>Зарплата:</b> Любая")
     exp = data.get("experience")
     if exp:
-        lines.append(f"<b>Опыт:</b> {EXPERIENCE.get(exp, exp)}")
-    emp_labels = [EMPLOYMENT_TYPES.get(e, e) for e in data.get("employment_types", [])]
+        lines.append(f"<b>Опыт:</b> {_h(EXPERIENCE.get(exp, exp))}")
+    emp_labels = [_h(EMPLOYMENT_TYPES.get(e, e)) for e in data.get("employment_types", [])]
     lines.append(f"<b>Тип занятости:</b> {', '.join(emp_labels) or 'Любой'}")
-    site_labels = [SITES.get(s, s) for s in sites]
+    site_labels = [_h(SITES.get(s, s)) for s in sites]
     lines.append(f"<b>Сайты:</b> {', '.join(site_labels)}")
 
     await _safe_edit(callback.message, text="\n".join(lines) + "\n\nСоздать этот фильтр?",
@@ -465,7 +470,7 @@ async def on_confirm(callback: CallbackQuery, state: FSMContext, db: Database):
         experience=data.get("experience"),
     )
     await state.clear()
-    await _safe_edit(callback.message, text=f"✅ Фильтр «{vf.name}» создан!\n\n"
+    await _safe_edit(callback.message, text=f"✅ Фильтр «{_h(vf.name)}» создан!\n\n"
         f"Теперь я буду присылать подходящие вакансии раз в час.",
         reply_markup=build_start_keyboard(),
     )

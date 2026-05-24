@@ -273,7 +273,10 @@ class Database:
     async def mark_sent(self, user_id: int, vacancy_id: int, filter_id: int | None = None):
         async with self.session_factory() as session:
             session.add(SentVacancy(user_id=user_id, vacancy_id=vacancy_id, filter_id=filter_id))
-            await session.commit()
+            try:
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
 
     async def get_filter_count(self) -> int:
         async with self.session_factory() as session:
@@ -318,7 +321,10 @@ class Database:
             )
             if exists.scalar_one_or_none() is None:
                 session.add(SavedVacancy(user_id=user_id, vacancy_id=vacancy_id))
-                await session.commit()
+                try:
+                    await session.commit()
+                except IntegrityError:
+                    await session.rollback()
 
     async def get_active_filter_count(self) -> int:
         async with self.session_factory() as session:

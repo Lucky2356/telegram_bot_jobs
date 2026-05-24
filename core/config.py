@@ -11,11 +11,17 @@ class Settings(BaseSettings):
     SUPERJOB_API_KEY: str = ""
     HH_CLIENT_ID: str = ""
     HH_CLIENT_SECRET: str = ""
+    HH_USER_AGENT: str = "TelegramJobBot/1.0 (job-bot)"
     DATABASE_URL: str = "sqlite+aiosqlite:///./vacancies.db"
     WEB_HOST: str = "127.0.0.1"
     WEB_PORT: int = 8000
+    WEB_CORS_ORIGINS: str = "*"
+    WEB_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    WEB_LOGIN_RATE_LIMIT: int = 10
+    WEB_ACTION_RATE_LIMIT: int = 20
     CHECK_INTERVAL_HOURS: int = 1
     WEB_PASSWORD: str = ""
+    JWT_SECRET: str = ""
     TELEGRAM_PROXY: str = ""
 
 

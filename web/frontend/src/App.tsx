@@ -3,7 +3,7 @@ import {
   MoonStar,
   Sun,
   MonitorCog,
-  Plus,
+  LogOut,
   SearchCheck,
   Filter,
   BellRing,
@@ -22,10 +22,10 @@ import { api } from './api'
 import Tabs from './components/Tabs'
 import FiltersPanel from './components/FiltersPanel'
 import ResultsPanel from './components/ResultsPanel'
-import HistoryPanel from './components/HistoryPanel'
 const StatsPanel = lazy(() => import('./components/StatsPanel'))
-import SavedPanel from './components/SavedPanel'
-import BlocklistPanel from './components/BlocklistPanel'
+const HistoryPanel = lazy(() => import('./components/HistoryPanel'))
+const SavedPanel = lazy(() => import('./components/SavedPanel'))
+const BlocklistPanel = lazy(() => import('./components/BlocklistPanel'))
 import StatusBar from './components/StatusBar'
 import FilterModal from './components/FilterModal'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -121,18 +121,23 @@ export default function App() {
     setToken(newToken)
   }, [])
 
+  const handleLogout = useCallback(() => {
+    sessionStorage.removeItem('auth_token')
+    setToken(null)
+  }, [])
+
   if (!token) {
     return <AuthGate onLogin={handleLogin} />
   }
 
   return (
     <ErrorBoundary>
-      <AuthenticatedApp />
+      <AuthenticatedApp onLogout={handleLogout} />
     </ErrorBoundary>
   )
 }
 
-function AuthenticatedApp() {
+function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [configError, setConfigError] = useState(false)
   const [status, setStatus] = useState<ParserStatus | null>(null)
@@ -254,20 +259,26 @@ function AuthenticatedApp() {
   }, [])
 
   useEffect(() => {
-    void fetchConfig()
-    void fetchStatus()
+    const timer = setTimeout(() => {
+      void fetchConfig()
+      void fetchStatus()
+    }, 0)
+    return () => clearTimeout(timer)
   }, [fetchConfig, fetchStatus])
 
   useEffect(() => {
-    if (activeTab === 'search') {
-      void fetchFilters()
-      void fetchResults()
-    } else if (activeTab === 'saved') {
-      void fetchSaved()
-      void fetchBlocklist()
-    } else if (activeTab === 'stats') {
-      void fetchStats()
-    }
+    const timer = setTimeout(() => {
+      if (activeTab === 'search') {
+        void fetchFilters()
+        void fetchResults()
+      } else if (activeTab === 'saved') {
+        void fetchSaved()
+        void fetchBlocklist()
+      } else if (activeTab === 'stats') {
+        void fetchStats()
+      }
+    }, 0)
+    return () => clearTimeout(timer)
   }, [activeTab, fetchFilters, fetchResults, fetchSaved, fetchBlocklist, fetchStats])
 
   useEffect(() => {
@@ -332,6 +343,22 @@ function AuthenticatedApp() {
     }
   }
 
+  const handleCheckFilter = useCallback(async (filterId: number, filterName?: string) => {
+    setChecking(true)
+    setCurrentFilter(filterName ?? filters.find((item) => item.id === filterId)?.name ?? null)
+    try {
+      await api.checkFilter(filterId)
+      toast.success('Проверка фильтра запущена')
+      window.setTimeout(() => {
+        void fetchResults()
+      }, 1800)
+    } catch {
+      setChecking(false)
+      setCurrentFilter(null)
+      toast.error('Ошибка запуска проверки фильтра')
+    }
+  }, [fetchResults, filters])
+
   const handleRefresh = useCallback(() => {
     void fetchFilters()
     void fetchResults()
@@ -341,7 +368,11 @@ function AuthenticatedApp() {
   }, [fetchFilters, fetchResults, fetchStats, fetchSaved, fetchBlocklist])
 
   const handleCloseFilter = useCallback(() => setCreateOpen(false), [])
-  const handleSavedFilter = useCallback(() => { handleRefresh() }, [handleRefresh])
+  const handleSavedFilter = useCallback((saved: VacancyFilter) => {
+    setSelectedFilterId(saved.id)
+    handleRefresh()
+    void handleCheckFilter(saved.id, saved.name)
+  }, [handleCheckFilter, handleRefresh])
 
   const pageTitle = TABS.find((t) => t.key === activeTab)?.label || ''
   const activeFilters = useMemo(() => filters.filter((f) => f.active).length, [filters])
@@ -350,7 +381,7 @@ function AuthenticatedApp() {
   return (
     <div className="min-h-screen text-primary">
       <div className="mx-auto flex min-h-screen w-full max-w-[1680px]">
-        <aside className="hidden w-72 shrink-0 border-r border-[var(--border)] bg-[color:var(--surface)]/80 px-5 pb-6 pt-5 backdrop-blur xl:flex xl:flex-col">
+        <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-r border-[var(--border)] bg-[color:var(--surface)]/80 px-5 pb-6 pt-5 backdrop-blur xl:flex xl:flex-col">
           <div className="mb-6 flex items-center gap-3 px-1">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl accent-gradient text-white shadow-[var(--shadow-sm)]">
               <LayoutGrid className="h-5 w-5" />
@@ -369,10 +400,18 @@ function AuthenticatedApp() {
             <button
               onClick={cycleTheme}
               className="focus-ring flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[color:var(--surface-strong)] text-sm font-medium text-secondary transition hover:border-[var(--border-strong)] hover:text-primary"
-              aria-label="Сменить тему"
+              aria-label={`Сменить тему: ${themeMeta.label}`}
             >
               {themeMeta.icon}
               <span className="btn-text">{themeMeta.label}</span>
+            </button>
+            <button
+              onClick={onLogout}
+              className="focus-ring flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/20"
+              aria-label="Выйти из аккаунта"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="btn-text">Выйти</span>
             </button>
           </div>
         </aside>
@@ -392,24 +431,21 @@ function AuthenticatedApp() {
 
               <div className="flex items-center gap-2">
                 <button
+                  onClick={onLogout}
+                  className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-xl border border-rose-400/30 bg-rose-500/10 text-rose-300 transition hover:bg-rose-500/20 xl:hidden"
+                  aria-label="Выйти из аккаунта"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+                <button
                   onClick={cycleTheme}
                   className="focus-ring inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] px-3 text-sm font-medium text-secondary transition hover:border-[var(--border-strong)] hover:text-primary xl:hidden"
-                  aria-label="Сменить тему"
+                  aria-label={`Сменить тему: ${themeMeta.label}`}
                 >
                   {themeMeta.icon}
                   <span className="btn-text hidden sm:inline">{themeMeta.label}</span>
                 </button>
 
-                <button
-                  onClick={() => {
-                    setCreateOpen(true)
-                    setSelectedFilterId(null)
-                  }}
-                  className="focus-ring inline-flex h-10 items-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)]"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span className="btn-text">Новый фильтр</span>
-                </button>
               </div>
             </div>
           </header>
@@ -489,6 +525,11 @@ function AuthenticatedApp() {
                           selectedId={selectedFilterId}
                           onSelect={setSelectedFilterId}
                           onRefresh={handleRefresh}
+                          onCreate={() => {
+                            setCreateOpen(true)
+                            setSelectedFilterId(null)
+                          }}
+                          onSavedFilter={handleSavedFilter}
                         />
                       </div>
                     </section>
@@ -517,7 +558,9 @@ function AuthenticatedApp() {
             {activeTab === 'history' && config && (
               <ErrorBoundary>
                 <section className="bento-card p-4 md:p-5">
-                  <HistoryPanel config={config} />
+                  <Suspense fallback={loadingSpinner}>
+                    <HistoryPanel config={config} />
+                  </Suspense>
                 </section>
               </ErrorBoundary>
             )}
@@ -530,7 +573,9 @@ function AuthenticatedApp() {
                       <h3 className="text-sm font-semibold text-primary">Сохранённые вакансии</h3>
                     </div>
                     <div className="p-4">
-                      <SavedPanel saved={saved} config={config} onRefresh={fetchSaved} />
+                      <Suspense fallback={loadingSpinner}>
+                        <SavedPanel saved={saved} config={config} onRefresh={fetchSaved} />
+                      </Suspense>
                     </div>
                   </article>
 
@@ -539,7 +584,9 @@ function AuthenticatedApp() {
                       <h3 className="text-sm font-semibold text-primary">Блок-лист</h3>
                     </div>
                     <div className="p-4">
-                      <BlocklistPanel items={blocklist} onRefresh={fetchBlocklist} />
+                      <Suspense fallback={loadingSpinner}>
+                        <BlocklistPanel items={blocklist} onRefresh={fetchBlocklist} />
+                      </Suspense>
                     </div>
                   </article>
                 </section>

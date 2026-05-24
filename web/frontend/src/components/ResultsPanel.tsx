@@ -66,7 +66,9 @@ export default function ResultsPanel({
   }, [results])
 
   const processed = useMemo(() => {
-    let items = [...results]
+    let items = selectedFilterId === null
+      ? [...results]
+      : results.filter((v) => v.filter_id === selectedFilterId || v.filter_name === selectedFilter?.name)
 
     if (search) {
       const q = search.toLowerCase()
@@ -92,7 +94,7 @@ export default function ResultsPanel({
     }
 
     return items
-  }, [results, search, sourceFilter, sortKey])
+  }, [results, search, sourceFilter, sortKey, selectedFilterId, selectedFilter?.name])
 
   const grouped = useMemo(() => {
     if (!groupBy) return null
@@ -170,7 +172,7 @@ export default function ResultsPanel({
                 ? 'border-[var(--border-strong)] bg-[var(--accent-soft)] text-primary'
                 : 'border-[var(--border)] bg-[color:var(--surface-elevated)] text-secondary hover:text-primary'
             }`}
-            aria-label="Группировать результаты"
+            aria-label={`Группы: ${groupBy ? 'группировка включена' : 'группировка выключена'}`}
           >
             <Layers3 className="h-4 w-4" />
             Группы
@@ -212,7 +214,7 @@ export default function ResultsPanel({
                 </h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {items.map((vacancy, idx) => (
-                    <div key={`${vacancy.source}-${vacancy.url}`} className="animate-fade-in-up" style={{ animationDelay: `${idx * 22}ms` }}>
+                    <div key={`${vacancy.source}-${vacancy.url}`} className="content-auto animate-fade-in-up" style={{ animationDelay: `${idx * 22}ms` }}>
                       <VacancyCard vacancy={vacancy} config={config} onDetail={setDetailVacancy} />
                     </div>
                   ))}
@@ -223,7 +225,7 @@ export default function ResultsPanel({
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {processed.map((vacancy, idx) => (
-              <div key={`${vacancy.source}-${vacancy.url}`} className="animate-fade-in-up" style={{ animationDelay: `${idx * 18}ms` }}>
+              <div key={`${vacancy.source}-${vacancy.url}`} className="content-auto animate-fade-in-up" style={{ animationDelay: `${idx * 18}ms` }}>
                 <VacancyCard vacancy={vacancy} config={config} onDetail={setDetailVacancy} />
               </div>
             ))}

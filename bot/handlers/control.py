@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from html import escape
 from aiogram import Router, F
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery
@@ -13,6 +14,10 @@ from core.database.repository import Database
 from core.scheduler import Scheduler
 
 router = Router()
+
+
+def _h(value) -> str:
+    return escape("" if value is None else str(value), quote=False)
 
 
 async def _safe_edit(msg, text=None, reply_markup=None, **kwargs):
@@ -46,8 +51,15 @@ async def cmd_filters(message: Message, db: Database):
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.FILTER_TOGGLE))
 async def on_filter_toggle(callback: CallbackQuery, db: Database):
     filter_id = int(FilterCallback.unpack(callback.data).value)
-    active = await db.toggle_filter(filter_id)
     user = await db.get_or_create_user(callback.from_user.id)
+    vf = await db.get_filter(filter_id)
+    if vf is None:
+        await callback.answer("Фильтр не найден", show_alert=True)
+        return
+    if vf.user_id != user.id:
+        await callback.answer("Нет доступа к этому фильтру", show_alert=True)
+        return
+    active = await db.toggle_filter(filter_id)
     filters = await db.get_user_filters(user.id)
     await _safe_edit(callback.message,
         reply_markup=build_filters_list_keyboard(filters)
@@ -59,8 +71,15 @@ async def on_filter_toggle(callback: CallbackQuery, db: Database):
 @router.callback_query(FilterCallback.filter(F.action == WizardAction.FILTER_DELETE))
 async def on_filter_delete(callback: CallbackQuery, db: Database):
     filter_id = int(FilterCallback.unpack(callback.data).value)
-    await db.delete_filter(filter_id)
     user = await db.get_or_create_user(callback.from_user.id)
+    vf = await db.get_filter(filter_id)
+    if vf is None:
+        await callback.answer("Фильтр не найден", show_alert=True)
+        return
+    if vf.user_id != user.id:
+        await callback.answer("Нет доступа к этому фильтру", show_alert=True)
+        return
+    await db.delete_filter(filter_id)
     filters = await db.get_user_filters(user.id)
     if filters:
         await _safe_edit(callback.message, reply_markup=build_filters_list_keyboard(filters)
@@ -79,13 +98,17 @@ async def on_filter_view(callback: CallbackQuery, db: Database):
     if vf is None:
         await callback.answer("Фильтр не найден", show_alert=True)
         return
-    lines = [f"📋 <b>{vf.name}</b>"]
+    user = await db.get_or_create_user(callback.from_user.id)
+    if vf.user_id != user.id:
+        await callback.answer("Нет доступа к этому фильтру", show_alert=True)
+        return
+    lines = [f"📋 <b>{_h(vf.name)}</b>"]
     lines.append(f"<b>Статус:</b> {'🟢 Активен' if vf.active else '🔴 На паузе'}")
-    lines.append(f"<b>Ключевые слова:</b> {', '.join(vf.get_keywords())}")
+    lines.append(f"<b>Ключевые слова:</b> {', '.join(_h(k) for k in vf.get_keywords())}")
     exc = vf.get_exclude_keywords()
     if exc:
-        lines.append(f"<b>Исключить:</b> {', '.join(exc)}")
-    lines.append(f"<b>Город:</b> {vf.city or 'Любой'}")
+        lines.append(f"<b>Исключить:</b> {', '.join(_h(k) for k in exc)}")
+    lines.append(f"<b>Город:</b> {_h(vf.city or 'Любой')}")
     if vf.salary_min is not None or vf.salary_max is not None:
         parts = []
         if vf.salary_min is not None:
@@ -95,11 +118,11 @@ async def on_filter_view(callback: CallbackQuery, db: Database):
         lines.append(f"<b>Зарплата:</b> {' '.join(parts)} ₽")
     else:
         lines.append("<b>Зарплата:</b> Любая")
-    emp_labels = [EMPLOYMENT_TYPES.get(e, e) for e in vf.get_employment_types()]
+    emp_labels = [_h(EMPLOYMENT_TYPES.get(e, e)) for e in vf.get_employment_types()]
     lines.append(f"<b>Занятость:</b> {', '.join(emp_labels) or 'Любая'}")
     if vf.experience:
-        lines.append(f"<b>Опыт:</b> {EXPERIENCE.get(vf.experience, vf.experience)}")
-    site_labels = [SITES.get(s, s) for s in vf.get_sites()]
+        lines.append(f"<b>Опыт:</b> {_h(EXPERIENCE.get(vf.experience, vf.experience))}")
+    site_labels = [_h(SITES.get(s, s)) for s in vf.get_sites()]
     lines.append(f"<b>Сайты:</b> {', '.join(site_labels)}")
     await _safe_edit(callback.message, text="\n".join(lines),
         reply_markup=build_filter_detail_keyboard(vf.id, vf.active),
@@ -115,6 +138,10 @@ async def on_filter_clone(callback: CallbackQuery, db: Database):
     if vf is None:
         await callback.answer("Фильтр не найден", show_alert=True)
         return
+    user = await db.get_or_create_user(callback.from_user.id)
+    if vf.user_id != user.id:
+        await callback.answer("Нет доступа к этому фильтру", show_alert=True)
+        return
     new_vf = await db.create_filter(
         user_id=vf.user_id,
         name=vf.name + " (копия)",
@@ -127,9 +154,8 @@ async def on_filter_clone(callback: CallbackQuery, db: Database):
         exclude_keywords=vf.get_exclude_keywords(),
         experience=vf.experience,
     )
-    user = await db.get_or_create_user(callback.from_user.id)
     filters = await db.get_user_filters(user.id)
-    await _safe_edit(callback.message, text=f"✅ Фильтр «{new_vf.name}» создан из копии «{vf.name}»",
+    await _safe_edit(callback.message, text=f"✅ Фильтр «{_h(new_vf.name)}» создан из копии «{_h(vf.name)}»",
         reply_markup=build_filters_list_keyboard(filters),
     )
     await callback.answer()
@@ -165,7 +191,7 @@ async def cmd_saved(message: Message, db: Database):
         return
     lines = ["📌 <b>Сохранённые вакансии:</b>\n"]
     for v in saved_vacs:
-        lines.append(f"💼 {v.title}\n🏢 {v.company or '—'} | 🔗 {v.url}\n")
+        lines.append(f"💼 {_h(v.title)}\n🏢 {_h(v.company or '—')} | 🔗 {_h(v.url)}\n")
     await message.answer("\n".join(lines), parse_mode="HTML", disable_web_page_preview=True)
 
 
@@ -184,7 +210,7 @@ async def cmd_blocklist(message: Message, db: Database):
         return
     lines = ["🚫 <b>Блок-лист компаний:</b>"]
     for b in blocks:
-        lines.append(f"• {b.pattern} ({b.type})")
+        lines.append(f"• {_h(b.pattern)} ({_h(b.type)})")
     await message.answer("\n".join(lines), parse_mode="HTML")
 
 

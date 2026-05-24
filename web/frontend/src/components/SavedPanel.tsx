@@ -30,7 +30,7 @@ export default function SavedPanel({ saved, config, onRefresh }: SavedPanelProps
 
   if (saved.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-[var(--border)] bg-[color:var(--surface-elevated)] p-8 text-center">
+      <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[color:var(--surface-elevated)] p-8 text-center">
         <p className="text-base font-medium text-primary">В избранном пока пусто</p>
         <p className="mt-2 text-sm text-secondary">Сохраняйте вакансии из ленты и возвращайтесь к ним позже.</p>
       </div>
@@ -42,7 +42,7 @@ export default function SavedPanel({ saved, config, onRefresh }: SavedPanelProps
       {saved.map((vacancy) => (
         <article
           key={vacancy.id}
-          className="rounded-xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-3 transition hover:border-[var(--border-strong)]"
+          className="rounded-2xl border border-[var(--border)] bg-[color:var(--surface-elevated)] p-3.5 transition hover:border-[var(--border-strong)]"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

@@ -1,6 +1,5 @@
 import logging
 import asyncio
-import re
 from aiogram import Bot
 from core.database.repository import Database
 from scrapers.hh_ru import HHScraper
@@ -23,7 +22,7 @@ class Scheduler:
         self._scrapers: dict[str, BaseScraper] = {}
         self._user_buffers: dict[int, list[tuple[int, str, str, str]]] = {}
         self._lock = asyncio.Lock()
-        self.last_results: dict[int, list[tuple[int, str | None, VacancyData]]] = {}
+        self.last_results: dict[int, list[tuple[int, str | None, VacancyData, int | None]]] = {}
         self.last_results_time: str | None = None
         self.event_queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=100)
 
@@ -41,7 +40,7 @@ class Scheduler:
 
     def get_last_results(self) -> list[dict]:
         """Return cached results from the last check as serializable dicts."""
-        combined: list[tuple[int, str | None, VacancyData]] = []
+        combined: list[tuple[int, str | None, VacancyData, int | None]] = []
         for items in self.last_results.values():
             combined.extend(items)
         # Keep most recent results capped
@@ -50,6 +49,7 @@ class Scheduler:
         return [
             {
                 "id": vac_id,
+                "filter_id": filter_id,
                 "filter_name": filter_name,
                 "title": v.title,
                 "company": v.company,
@@ -62,7 +62,7 @@ class Scheduler:
                 "source": v.source,
                 "published_at": v.published_at.isoformat() if v.published_at else None,
             }
-            for vac_id, filter_name, v in combined
+            for vac_id, filter_name, v, filter_id in combined
         ]
 
     def _get_scraper(self, site: str) -> BaseScraper | None:
@@ -95,6 +95,7 @@ class Scheduler:
         async with self._lock:
             from datetime import datetime, timezone
             self._user_buffers.clear()
+            self.last_results.clear()
             self.last_results_time = datetime.now(timezone.utc).isoformat()
             await self._publish({"type": "check_started"})
             logger.info("Starting single-filter check for filter %s...", filter_id)
@@ -108,8 +109,8 @@ class Scheduler:
                 await self._publish({"type": "check_complete", "total_found": 0})
                 return
             await self._publish({"type": "filter_started", "filter_id": vf.id, "filter_name": vf.name})
-            await self._check_filter(vf, user)
-            found = sum(len(v) for v in self._user_buffers.values())
+            await self._check_filter(vf, user, notify=False)
+            found = sum(len(v) for v in self.last_results.values())
             await self._publish({"type": "filter_done", "filter_id": vf.id, "filter_name": vf.name, "found": found})
             await self._publish({"type": "check_complete", "total_found": found})
             logger.info("Single-filter check completed.")
@@ -168,6 +169,7 @@ class Scheduler:
         async with self._lock:
             from datetime import datetime, timezone
             self._user_buffers.clear()
+            self.last_results.clear()
             self.last_results_time = datetime.now(timezone.utc).isoformat()
             logger.info("Starting vacancy check...")
             await self._publish({"type": "check_started"})
@@ -196,7 +198,7 @@ class Scheduler:
             asyncio.create_task(self._safe_send_to_telegram())
         logger.info("Vacancy check completed.")
 
-    async def _check_filter(self, vf, user=None):
+    async def _check_filter(self, vf, user=None, notify: bool = True):
         if user is None:
             user = await self.db.get_user(vf.user_id)
             if not user:
@@ -209,30 +211,42 @@ class Scheduler:
         emp_types = vf.get_employment_types()
         exclude_kw = get_synonyms(vf.get_exclude_keywords())
         experience = vf.experience
+        search_queries = self._build_search_queries(keywords, search_terms)
 
         for site_key in sites:
             scraper = self._get_scraper(site_key)
             if not scraper:
                 continue
-            try:
-                vacancies = await scraper.search(keywords=search_terms, city=city)
-            except Exception as e:
-                logger.warning("Scraper %s error: %s", site_key, e)
-                continue
-
-            for vac_data in vacancies:
+            seen: set[tuple[str, str]] = set()
+            for query in search_queries:
                 try:
-                    await self._process_vacancy(
-                        vac_data, vf, user, search_terms, emp_types, exclude_kw, experience,
-                    )
+                    vacancies = await scraper.search(keywords=[query], city=city)
                 except Exception as e:
-                    logger.warning("Process vacancy error: %s", e)
+                    logger.warning("Scraper %s error for query %r: %s", site_key, query, e)
+                    continue
+
+                logger.info(
+                    "Scraper %s returned %d vacancies for filter %s query %r",
+                    site_key, len(vacancies), vf.id, query,
+                )
+                for vac_data in vacancies:
+                    dedupe_key = (vac_data.source, vac_data.source_id or vac_data.url)
+                    if dedupe_key in seen:
+                        continue
+                    seen.add(dedupe_key)
+                    try:
+                        await self._process_vacancy(
+                            vac_data, vf, user, search_terms, emp_types, exclude_kw, experience, notify=notify,
+                        )
+                    except Exception as e:
+                        logger.warning("Process vacancy error: %s", e)
 
     async def _process_vacancy(
         self, vac_data: VacancyData, vf, user,
         keywords: list[str], emp_types: list[str],
         exclude_keywords: list[str] | None = None,
         experience: str | None = None,
+        notify: bool = True,
     ):
         if not self._matches_keywords(vac_data, keywords):
             return
@@ -242,8 +256,8 @@ class Scheduler:
             if not vac_data.employment_type or vac_data.employment_type not in emp_types:
                 return
         if vf.city:
-            city_label = CITIES.get(vf.city, vf.city).lower()
-            if not vac_data.city or re.search(rf"\b{re.escape(city_label)}\b", vac_data.city.lower()) is None:
+            city_label = CITIES.get(vf.city, vf.city).casefold()
+            if not vac_data.city or city_label not in vac_data.city.casefold():
                 return
         if experience:
             if not vac_data.experience or vac_data.experience != experience:
@@ -258,36 +272,49 @@ class Scheduler:
 
         vac = await self.db.add_vacancy(vac_data)
 
-        if await self.db.is_sent(user.id, vac.id):
+        if await self.db.is_blocked(user.id, vac_data.company, vac_data.title):
             return
 
-        if await self.db.is_blocked(user.id, vac_data.company, vac_data.title):
+        if not notify:
+            self.last_results.setdefault(user.id, []).append((vac.id, vf.name, vac_data, vf.id))
+            return
+
+        if await self.db.is_sent(user.id, vac.id):
             return
 
         card = format_vacancy_card(vac_data)
         try:
             self._user_buffers.setdefault(user.id, []).append((vac.id, vac_data.source, vac_data.url, card))
-            self.last_results.setdefault(user.id, []).append((vac.id, vf.name, vac_data))
+            self.last_results.setdefault(user.id, []).append((vac.id, vf.name, vac_data, vf.id))
             await self.db.mark_sent(user.id, vac.id, filter_id=vf.id)
             logger.info("Buffered vacancy %s for user %s", vac_data.title[:50], user.telegram_id)
         except Exception as e:
             logger.warning("Failed to buffer vacancy: %s", e)
 
+    def _build_search_queries(self, keywords: list[str], search_terms: list[str]) -> list[str]:
+        """Query external sites with short alternatives instead of one joined synonym string."""
+        raw_queries = [*keywords, *search_terms]
+        queries = [query.strip() for query in raw_queries if query and query.strip()]
+        return list(dict.fromkeys(queries))
+
     def _matches_keywords(self, vac: VacancyData, keywords: list[str]) -> bool:
-        title_lower = vac.title.lower()
+        if not keywords:
+            return True
+        haystack = self._normalize_search_text(f"{vac.title} {vac.description or ''}")
         for kw in keywords:
-            if re.search(rf"\b{re.escape(kw.lower())}\b", title_lower):
+            query = self._normalize_search_text(kw.strip()) if kw else ""
+            if not query:
+                continue
+            if query in haystack:
                 return True
-        if vac.description:
-            desc_lower = vac.description.lower()
-            for kw in keywords:
-                if re.search(rf"\b{re.escape(kw.lower())}\b", desc_lower):
-                    return True
+            tokens = [token for token in query.split() if len(token) > 1]
+            if len(tokens) > 1 and all(token in haystack for token in tokens):
+                return True
         return False
 
     def _has_excluded(self, vac: VacancyData, exclude_keywords: list[str]) -> bool:
-        text_lower = f"{vac.title} {vac.description or ''}".lower()
-        for kw in exclude_keywords:
-            if re.search(rf"\b{re.escape(kw.lower())}\b", text_lower):
-                return True
-        return False
+        haystack = self._normalize_search_text(f"{vac.title} {vac.description or ''}")
+        return any(self._normalize_search_text(kw.strip()) in haystack for kw in exclude_keywords if kw and kw.strip())
+
+    def _normalize_search_text(self, text: str) -> str:
+        return text.casefold().replace("1\u0441", "1c")

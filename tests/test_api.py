@@ -5,6 +5,16 @@ from core.config import settings
 from web.app import create_web_app
 
 
+class FakeScheduler:
+    is_checking = False
+
+    async def run_check(self):
+        return None
+
+    async def run_check_for_filter(self, filter_id: int):
+        return None
+
+
 @pytest.fixture
 def app(db: Database):
     return create_web_app(db, scheduler=None)
@@ -52,6 +62,106 @@ async def test_create_and_list_filters(app, db):
         filters = list_resp.json()
         assert len(filters) >= 1
         assert filters[0]["name"] == "Python Dev"
+
+
+@pytest.mark.asyncio
+async def test_create_filter_normalizes_input_and_defaults_to_all_sites(app, db):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/api/filters",
+            json={
+                "name": "  Custom  ",
+                "keywords": [" Python ", "Python", "Django"],
+                "city": None,
+                "salary_min": None,
+                "salary_max": None,
+                "employment_types": ["remote", "remote"],
+                "sites": [],
+                "experience": None,
+                "exclude_keywords": ["стажер", " стажер "],
+            },
+        )
+
+    assert create_resp.status_code == 200
+    created = create_resp.json()["filter"]
+    assert created["name"] == "Custom"
+    assert created["keywords"] == ["Python", "Django"]
+    assert created["exclude_keywords"] == ["стажер"]
+    assert created["employment_types"] == ["remote"]
+    assert set(created["sites"]) == {"hh", "superjob", "rabota", "habr", "trudvsem"}
+
+
+@pytest.mark.asyncio
+async def test_create_filter_rejects_empty_keywords(app, db):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/filters",
+            json={
+                "name": "Empty",
+                "keywords": ["  "],
+                "city": None,
+                "salary_min": None,
+                "salary_max": None,
+                "employment_types": [],
+                "sites": ["hh"],
+                "experience": None,
+                "exclude_keywords": [],
+            },
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["ok"] is False
+
+
+@pytest.mark.asyncio
+async def test_create_filter_rejects_invalid_enum_values(app, db):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/api/filters",
+            json={
+                "name": "Invalid",
+                "keywords": ["Python"],
+                "city": "unknown-city",
+                "salary_min": -1,
+                "salary_max": None,
+                "employment_types": ["full"],
+                "sites": ["hh"],
+                "experience": None,
+                "exclude_keywords": [],
+            },
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["ok"] is False
+
+
+@pytest.mark.asyncio
+async def test_web_filter_actions_are_limited_to_current_user(app, db):
+    current_user = await db.get_or_create_user(telegram_id=111, username="current")
+    other_user = await db.get_or_create_user(telegram_id=222, username="other")
+    foreign_filter = await db.create_filter(
+        user_id=other_user.id,
+        name="Other User Filter",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        toggle_resp = await client.post(f"/api/filters/{foreign_filter.id}/toggle")
+        delete_resp = await client.delete(f"/api/filters/{foreign_filter.id}")
+
+    assert current_user.id != other_user.id
+    assert toggle_resp.status_code == 403
+    assert delete_resp.status_code == 403
+    assert await db.get_filter(foreign_filter.id) is not None
 
 
 @pytest.mark.asyncio
@@ -126,6 +236,77 @@ async def test_get_status(app, db):
         data = resp.json()
         for parser in ("hh", "superjob", "trudvsem", "rabota", "habr"):
             assert parser in data
+
+
+@pytest.mark.asyncio
+async def test_health_endpoint(app, db):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/health")
+
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_health_endpoint_stays_public_when_auth_enabled(db):
+    original_password = settings.WEB_PASSWORD
+    settings.WEB_PASSWORD = "secret-pass"
+    try:
+        secured_app = create_web_app(db, scheduler=None)
+        transport = ASGITransport(app=secured_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/health")
+
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+    finally:
+        settings.WEB_PASSWORD = original_password
+
+
+@pytest.mark.asyncio
+async def test_login_rate_limit_returns_429(db):
+    original_password = settings.WEB_PASSWORD
+    original_limit = settings.WEB_LOGIN_RATE_LIMIT
+    original_window = settings.WEB_RATE_LIMIT_WINDOW_SECONDS
+    settings.WEB_PASSWORD = "secret-pass"
+    settings.WEB_LOGIN_RATE_LIMIT = 2
+    settings.WEB_RATE_LIMIT_WINDOW_SECONDS = 60
+    try:
+        secured_app = create_web_app(db, scheduler=None)
+        transport = ASGITransport(app=secured_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            first = await client.post("/api/auth/login", json={"password": "bad-pass"})
+            second = await client.post("/api/auth/login", json={"password": "bad-pass"})
+            third = await client.post("/api/auth/login", json={"password": "bad-pass"})
+
+        assert first.status_code == 401
+        assert second.status_code == 401
+        assert third.status_code == 429
+    finally:
+        settings.WEB_PASSWORD = original_password
+        settings.WEB_LOGIN_RATE_LIMIT = original_limit
+        settings.WEB_RATE_LIMIT_WINDOW_SECONDS = original_window
+
+
+@pytest.mark.asyncio
+async def test_check_now_rate_limit_returns_429(db):
+    original_limit = settings.WEB_ACTION_RATE_LIMIT
+    original_window = settings.WEB_RATE_LIMIT_WINDOW_SECONDS
+    settings.WEB_ACTION_RATE_LIMIT = 1
+    settings.WEB_RATE_LIMIT_WINDOW_SECONDS = 60
+    try:
+        app = create_web_app(db, scheduler=FakeScheduler())
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            first = await client.post("/api/check_now")
+            second = await client.post("/api/check_now")
+
+        assert first.status_code == 200
+        assert second.status_code == 429
+    finally:
+        settings.WEB_ACTION_RATE_LIMIT = original_limit
+        settings.WEB_RATE_LIMIT_WINDOW_SECONDS = original_window
 
 
 @pytest.mark.asyncio
@@ -282,3 +463,13 @@ async def test_web_user_data_is_merged_into_real_user(app, db):
 
     moved = await db.get_filter(old_filter.id)
     assert moved.user_id == real_user.id
+
+
+@pytest.mark.asyncio
+async def test_events_endpoint_smoke_without_scheduler(db):
+    app = create_web_app(db, scheduler=None)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/events")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
