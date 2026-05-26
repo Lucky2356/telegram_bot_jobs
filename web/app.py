@@ -2,11 +2,14 @@ import asyncio
 import json
 import os
 import logging
+import shutil
 from collections import defaultdict, deque
+from datetime import datetime, timezone
+from pathlib import Path
 from time import monotonic
 import uvicorn
 from pydantic import BaseModel
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,8 +19,8 @@ from core.config import settings
 from core.database.repository import Database
 from core.scheduler import Scheduler
 from bot.keyboards import EMPLOYMENT_TYPES, SITES, KEYWORDS_BY_GROUP, CITIES, SALARIES, EXPERIENCE
-from web.auth import create_token, verify_token
-from utils.text_cleaner import clean_html
+from sqlalchemy.engine import make_url
+from web.auth import create_token, password_is_valid, verify_token
 
 
 REACT_BUILD_DIR = os.path.join(os.path.dirname(__file__), "frontend", "dist")
@@ -45,6 +48,16 @@ class FilterUpdate(BaseModel):
     sites: list[str]
     experience: str | None = None
     exclude_keywords: list[str] = []
+
+
+class FiltersImport(BaseModel):
+    filters: list[FilterUpdate]
+    replace: bool = False
+
+
+class VacancyFeedback(BaseModel):
+    filter_id: int | None = None
+    action: str = "exclude_noise"
 
 
 def _clean_unique(values: list[str]) -> list[str]:
@@ -91,6 +104,57 @@ def _normalize_filter_payload(data: FilterUpdate) -> tuple[dict | None, JSONResp
     }, None
 
 
+def _serialize_dt(value):
+    return value.isoformat() if value else None
+
+
+def _sqlite_database_path() -> Path | None:
+    try:
+        url = make_url(settings.DATABASE_URL)
+    except Exception:
+        return None
+    if not url.drivername.startswith("sqlite"):
+        return None
+    database = url.database
+    if not database or database == ":memory:":
+        return None
+    return Path(database).resolve()
+
+
+def _is_recent(value, ttl_seconds: int) -> bool:
+    if not value:
+        return False
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - value).total_seconds() <= ttl_seconds
+
+
+def _config_warnings() -> list[dict[str, str]]:
+    warnings = []
+    if settings.WEB_HOST in {"0.0.0.0", "::"} and not (settings.WEB_PASSWORD or settings.WEB_PASSWORD_HASH):
+        warnings.append({"level": "high", "message": "Веб-панель открыта наружу без пароля"})
+    if settings.WEB_CORS_ORIGINS.strip() == "*":
+        warnings.append({"level": "medium", "message": "WEB_CORS_ORIGINS=* лучше заменить на конкретные origin"})
+    if not settings.JWT_SECRET:
+        warnings.append({"level": "medium", "message": "JWT_SECRET не задан, используется локальный .jwt_secret"})
+    if settings.WEB_PASSWORD and not settings.WEB_PASSWORD_HASH:
+        warnings.append({"level": "low", "message": "WEB_PASSWORD лучше заменить на WEB_PASSWORD_HASH"})
+    if not settings.SUPERJOB_API_KEY:
+        warnings.append({"level": "low", "message": "SuperJob API key не настроен"})
+    if not (settings.HH_CLIENT_ID and settings.HH_CLIENT_SECRET):
+        warnings.append({"level": "low", "message": "HH OAuth не настроен, hh.ru может ограничивать выдачу"})
+    return warnings
+
+
+def _suggest_exclusions_from_title(title: str) -> list[str]:
+    noise = (
+        "врач", "невролог", "медицин", "медсестр", "фармацевт", "продавец",
+        "кассир", "курьер", "водитель", "грузчик", "повар", "охранник",
+    )
+    text = title.casefold()
+    return [word for word in noise if word in text][:5]
+
+
 async def _get_first_user(db: Database):
     real_user = await db.get_first_real_user()
     if real_user is not None:
@@ -129,6 +193,8 @@ async def _serve_react_or_fallback(app: FastAPI, request: Request, templates: Ji
 def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     app = FastAPI(title="Job Bot Dashboard")
     app.state.db = db
+    app.state.background_tasks = set()
+    app.state.auth_token_version = 0
     rate_buckets = defaultdict(deque)
     app.add_middleware(
         CORSMiddleware,
@@ -168,18 +234,31 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         elif path == "/" or path.endswith(".html"):
             response.headers["Cache-Control"] = "no-cache"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self';"
+        )
         return response
 
     # Auth middleware
-    if settings.WEB_PASSWORD:
+    if settings.WEB_PASSWORD or settings.WEB_PASSWORD_HASH:
         @app.middleware("http")
         async def auth_middleware(request: Request, call_next):
             path = request.url.path
-            EXCLUDED_PREFIXES = ("/api/auth/", "/api/events")
-            EXCLUDED_PATHS = {"/api/health"}
+            EXCLUDED_PREFIXES = ("/api/events",)
+            EXCLUDED_PATHS = {"/api/health", "/api/auth/login", "/api/auth/hash-password"}
             if path.startswith("/api/") and path not in EXCLUDED_PATHS and not path.startswith(EXCLUDED_PREFIXES):
                 auth = request.headers.get("Authorization", "")
-                if not auth.startswith("Bearer ") or not verify_token(auth[7:]):
+                if not auth.startswith("Bearer ") or not verify_token(auth[7:], app.state.auth_token_version):
                     return HTMLResponse(
                         content=json.dumps({"ok": False, "message": "Unauthorized"}),
                         status_code=HTTP_401_UNAUTHORIZED,
@@ -203,11 +282,33 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
     async def api_login(data: LoginData, request: Request):
         if _is_rate_limited(f"login:{_client_ip(request)}", settings.WEB_LOGIN_RATE_LIMIT):
             return _rate_limit_response()
-        if settings.WEB_PASSWORD and data.password == settings.WEB_PASSWORD:
-            return {"ok": True, "token": create_token()}
-        if not settings.WEB_PASSWORD:
-            return {"ok": True, "token": create_token()}
+        auth_enabled = bool(settings.WEB_PASSWORD or settings.WEB_PASSWORD_HASH)
+        if auth_enabled and password_is_valid(data.password):
+            return {"ok": True, "token": create_token(app.state.auth_token_version), "ttl": settings.WEB_SESSION_TTL_SECONDS}
+        if not auth_enabled:
+            return {"ok": True, "token": create_token(app.state.auth_token_version), "ttl": settings.WEB_SESSION_TTL_SECONDS}
         return JSONResponse({"ok": False, "message": "Неверный пароль"}, status_code=HTTP_401_UNAUTHORIZED)
+
+    @app.post("/api/auth/logout")
+    async def api_logout():
+        app.state.auth_token_version += 1
+        return {"ok": True}
+
+    @app.get("/api/auth/session")
+    async def api_session():
+        return {"ok": True, "ttl": settings.WEB_SESSION_TTL_SECONDS}
+
+    class HashPasswordData(BaseModel):
+        password: str
+
+    @app.post("/api/auth/hash-password")
+    async def api_hash_password(data: HashPasswordData, request: Request):
+        if _is_rate_limited(f"hash_password:{_client_ip(request)}", 3):
+            return _rate_limit_response()
+        if len(data.password) < 8:
+            return JSONResponse({"ok": False, "message": "Password must be at least 8 characters"}, status_code=400)
+        from web.auth import hash_password
+        return {"ok": True, "hash": hash_password(data.password)}
 
     @app.get("/api/config")
     async def api_config():
@@ -226,6 +327,17 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             "ok": True,
             "scheduler": bool(scheduler),
             "checking": scheduler.is_checking if scheduler else False,
+            "warnings": _config_warnings(),
+        }
+
+    @app.get("/api/config/diagnostics")
+    async def api_config_diagnostics():
+        return {
+            "warnings": _config_warnings(),
+            "auth_enabled": bool(settings.WEB_PASSWORD or settings.WEB_PASSWORD_HASH),
+            "cors_origins": _parse_cors_origins(),
+            "database": make_url(settings.DATABASE_URL).drivername,
+            "search_cache_seconds": settings.SEARCH_CACHE_SECONDS,
         }
 
     @app.get("/api/stats")
@@ -294,6 +406,60 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
             }
             for vf in filters
         ]
+
+    @app.get("/api/filters/export")
+    async def api_export_filters():
+        filters = await db.get_all_filters()
+        return {
+            "version": 1,
+            "filters": [
+                {
+                    "name": vf.name,
+                    "keywords": vf.get_keywords(),
+                    "city": vf.city,
+                    "salary_min": vf.salary_min,
+                    "salary_max": vf.salary_max,
+                    "employment_types": vf.get_employment_types(),
+                    "sites": vf.get_sites(),
+                    "exclude_keywords": vf.get_exclude_keywords(),
+                    "experience": vf.experience,
+                }
+                for vf in filters
+            ],
+        }
+
+    @app.post("/api/filters/import")
+    async def api_import_filters(data: FiltersImport):
+        user = await _get_first_user(db)
+        if data.replace:
+            for vf in await db.get_all_filters():
+                if vf.user_id == user.id:
+                    await db.delete_filter(vf.id)
+        created = []
+        for item in data.filters:
+            payload, error = _normalize_filter_payload(item)
+            if error:
+                return error
+            vf = await db.create_filter(user_id=user.id, **payload)
+            created.append({
+                "id": vf.id,
+                "name": vf.name,
+                "keywords": vf.get_keywords(),
+                "city": vf.city,
+                "salary_min": vf.salary_min,
+                "salary_max": vf.salary_max,
+                "employment_types": vf.get_employment_types(),
+                "sites": vf.get_sites(),
+                "exclude_keywords": vf.get_exclude_keywords(),
+                "experience": vf.experience,
+                "active": vf.active,
+            })
+        return {"ok": True, "created": created}
+
+    @app.get("/api/filters/performance")
+    async def api_filter_performance(days: int = 30):
+        days = max(1, min(days, 365))
+        return await db.get_filter_performance(days=days)
 
     @app.get("/api/filters/{filter_id}")
     async def api_get_filter(filter_id: int):
@@ -411,22 +577,27 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     async def _run_task(coro, name: str):
+        logging.getLogger(__name__).info("Background task '%s' started", name)
         try:
             await coro
+            logging.getLogger(__name__).info("Background task '%s' finished", name)
         except Exception as e:
             logging.getLogger(__name__).error("Background task '%s' failed: %s", name, e, exc_info=True)
 
     @app.post("/api/check_now")
-    async def api_check_now(request: Request):
+    async def api_check_now(request: Request, background_tasks: BackgroundTasks):
         if _is_rate_limited(f"check_all:{_client_ip(request)}", settings.WEB_ACTION_RATE_LIMIT):
             return _rate_limit_response()
         if scheduler:
-            asyncio.create_task(_run_task(scheduler.run_check(), "check_all"))
+            if hasattr(scheduler, "enqueue_check"):
+                status = await scheduler.enqueue_check()
+                return {"ok": True, "message": "Проверка поставлена в очередь!", "queue": status}
+            background_tasks.add_task(_run_task, scheduler.run_check(), "check_all")
             return {"ok": True, "message": "Проверка запущена!"}
         return {"ok": False, "message": "Scheduler not available"}
 
     @app.post("/api/filters/{filter_id}/check")
-    async def api_check_filter(filter_id: int, request: Request):
+    async def api_check_filter(filter_id: int, request: Request, background_tasks: BackgroundTasks):
         if _is_rate_limited(f"check_filter:{_client_ip(request)}", settings.WEB_ACTION_RATE_LIMIT):
             return _rate_limit_response()
         user = await _get_first_user(db)
@@ -436,9 +607,218 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
         if vf.user_id != user.id:
             return JSONResponse({"ok": False, "message": "Forbidden"}, status_code=403)
         if scheduler:
-            asyncio.create_task(_run_task(scheduler.run_check_for_filter(filter_id), f"check_filter_{filter_id}"))
+            if hasattr(scheduler, "enqueue_check"):
+                status = await scheduler.enqueue_check(filter_id)
+                return {"ok": True, "message": "Проверка фильтра поставлена в очередь!", "queue": status}
+            background_tasks.add_task(_run_task, scheduler.run_check_for_filter(filter_id), f"check_filter_{filter_id}")
             return {"ok": True, "message": "Проверка фильтра запущена!"}
         return {"ok": False, "message": "Scheduler not available"}
+
+    @app.get("/api/tasks/status")
+    async def api_tasks_status():
+        if scheduler and hasattr(scheduler, "get_check_queue_status"):
+            return scheduler.get_check_queue_status()
+        return {"queued": 0, "worker_running": False, "checking": False}
+
+    @app.post("/api/filters/{filter_id}/preview")
+    async def api_preview_filter(filter_id: int):
+        if not scheduler:
+            return {"items": [], "checked_at": None, "checking": False}
+        items = await scheduler.preview_filter(filter_id)
+        return {"items": items, "checked_at": scheduler.last_results_time, "checking": False}
+
+    @app.get("/api/filters/{filter_id}/diagnostics")
+    async def api_filter_diagnostics(filter_id: int):
+        if not scheduler:
+            return JSONResponse({"ok": False, "message": "Scheduler not available"}, status_code=503)
+        data = await scheduler.diagnose_filter(filter_id)
+        if not data.get("ok"):
+            return JSONResponse(data, status_code=404)
+        return data
+
+    @app.get("/api/parsers/health")
+    async def api_parsers_health():
+        if not scheduler:
+            return []
+        stored = {item.site: item for item in await db.get_parser_health()}
+        if stored and all(_is_recent(item.checked_at, settings.WEB_PARSER_HEALTH_CACHE_SECONDS) for item in stored.values()):
+            return [
+                {
+                    "site": item.site,
+                    "ok": item.ok,
+                    "count": item.count,
+                    "latency_ms": item.latency_ms,
+                    "error": item.error,
+                    "checked_at": _serialize_dt(item.checked_at),
+                    "cached": True,
+                }
+                for item in stored.values()
+            ]
+        results = []
+        for site in SITES:
+            scraper = scheduler._get_scraper(site)
+            if not scraper:
+                results.append({"site": site, "ok": False, "count": 0, "error": "not configured"})
+                continue
+            started = monotonic()
+            try:
+                vacancies = await scraper.search(["Python"], city=None)
+                results.append({
+                    "site": site,
+                    "ok": True,
+                    "count": len(vacancies),
+                    "latency_ms": round((monotonic() - started) * 1000),
+                })
+            except Exception as e:
+                results.append({
+                    "site": site,
+                    "ok": False,
+                    "count": 0,
+                    "latency_ms": round((monotonic() - started) * 1000),
+                    "error": str(e),
+                })
+            await db.upsert_parser_health(
+                site=results[-1]["site"],
+                ok=results[-1]["ok"],
+                count=results[-1]["count"],
+                latency_ms=results[-1].get("latency_ms"),
+                error=results[-1].get("error"),
+            )
+        return results
+
+    @app.get("/api/events/logs")
+    async def api_event_logs():
+        return scheduler.get_event_log() if scheduler else []
+
+    @app.get("/api/sources/health-history")
+    async def api_sources_health_history():
+        items = await db.get_parser_health()
+        return [
+            {
+                "site": item.site,
+                "ok": item.ok,
+                "count": item.count,
+                "latency_ms": item.latency_ms,
+                "error": item.error,
+                "checked_at": _serialize_dt(item.checked_at),
+            }
+            for item in items
+        ]
+
+    @app.get("/api/delivery/status")
+    async def api_delivery_status():
+        return await db.get_telegram_delivery_stats()
+
+    @app.get("/api/delivery/recent")
+    async def api_delivery_recent(limit: int = 30):
+        limit = max(1, min(limit, 100))
+        items = await db.get_recent_telegram_deliveries(limit=limit)
+        return [
+            {
+                "id": item.id,
+                "chat_id": item.chat_id,
+                "vacancy_id": item.vacancy_id,
+                "source": item.source,
+                "url": item.url,
+                "status": item.status,
+                "attempts": item.attempts,
+                "last_error": item.last_error,
+                "created_at": _serialize_dt(item.created_at),
+                "updated_at": _serialize_dt(item.updated_at),
+            }
+            for item in items
+        ]
+
+    @app.post("/api/delivery/retry")
+    async def api_delivery_retry():
+        if not scheduler:
+            restored = await db.retry_failed_telegram_deliveries()
+            return {"restored": restored, **await db.get_telegram_delivery_stats()}
+        return await scheduler.retry_telegram_delivery_queue()
+
+    @app.post("/api/delivery/cleanup")
+    async def api_delivery_cleanup(days: int = 14):
+        days = max(1, min(days, 365))
+        deleted = await db.cleanup_telegram_deliveries(days=days)
+        return {"ok": True, "deleted": deleted, **await db.get_telegram_delivery_stats()}
+
+    @app.post("/api/backup")
+    async def api_backup():
+        db_path = _sqlite_database_path()
+        if db_path is None or not db_path.exists():
+            return JSONResponse({"ok": False, "message": "SQLite database file not found"}, status_code=400)
+        backup_dir = Path(settings.BACKUP_DIR)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        name = f"vacancies-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.db"
+        target = backup_dir / name
+        shutil.copy2(db_path, target)
+        return {"ok": True, "file": str(target), "size": target.stat().st_size}
+
+    @app.get("/api/backup/list")
+    async def api_backup_list():
+        backup_dir = Path(settings.BACKUP_DIR)
+        if not backup_dir.exists():
+            return []
+        return [
+            {
+                "file": str(path),
+                "name": path.name,
+                "size": path.stat().st_size,
+                "modified_at": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(),
+            }
+            for path in sorted(backup_dir.glob("*.db"), key=lambda item: item.stat().st_mtime, reverse=True)
+        ][:50]
+
+    @app.get("/api/backup/export")
+    async def api_backup_export():
+        filters = await db.get_all_filters()
+        blocks = await db.get_blocklist()
+        saved = await db.get_saved_vacancies()
+        history = await db.get_recent_sent(limit=500)
+        return {
+            "version": 1,
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "filters": [
+                {
+                    "name": vf.name,
+                    "keywords": vf.get_keywords(),
+                    "city": vf.city,
+                    "salary_min": vf.salary_min,
+                    "salary_max": vf.salary_max,
+                    "employment_types": vf.get_employment_types(),
+                    "sites": vf.get_sites(),
+                    "exclude_keywords": vf.get_exclude_keywords(),
+                    "experience": vf.experience,
+                    "active": vf.active,
+                }
+                for vf in filters
+            ],
+            "blocklist": [
+                {"pattern": item.pattern, "type": item.type, "created_at": _serialize_dt(item.created_at)}
+                for item in blocks
+            ],
+            "saved": [
+                {
+                    "title": vacancy.title,
+                    "company": vacancy.company,
+                    "source": vacancy.source,
+                    "url": vacancy.url,
+                    "saved_at": _serialize_dt(saved_item.saved_at),
+                }
+                for saved_item, vacancy in saved
+            ],
+            "history": [
+                {
+                    "title": vacancy.title,
+                    "company": vacancy.company,
+                    "source": vacancy.source,
+                    "url": vacancy.url,
+                    "filter_name": vf.name if vf else None,
+                    "sent_at": _serialize_dt(sent.sent_at),
+                }
+                for sent, vacancy, _user, vf in history
+            ],
+        }
 
     @app.get("/api/saved")
     async def api_saved():
@@ -516,6 +896,60 @@ def create_web_app(db: Database, scheduler: Scheduler | None = None) -> FastAPI:
         else:
             await db.add_blocklist(user.id, vac.title, "keyword")
         return {"ok": True}
+
+    @app.post("/api/vacancies/{vacancy_id}/feedback")
+    async def api_vacancy_feedback(vacancy_id: int, data: VacancyFeedback):
+        user = await _get_first_user(db)
+        vac = await db.get_vacancy_by_id(vacancy_id)
+        if not vac:
+            return JSONResponse({"ok": False, "message": "Vacancy not found"}, status_code=404)
+
+        suggestions = _suggest_exclusions_from_title(vac.title)
+        applied: list[str] = []
+        if data.action == "block_company" and vac.company:
+            await db.add_blocklist(user.id, vac.company, "company")
+            applied.append(f"company:{vac.company}")
+        elif data.action == "exclude_noise" and data.filter_id and suggestions:
+            vf = await db.get_filter(data.filter_id)
+            if vf is None or vf.user_id != user.id:
+                return JSONResponse({"ok": False, "message": "Filter not found"}, status_code=404)
+            await db.append_filter_exclude_keywords(data.filter_id, suggestions)
+            applied.extend(suggestions)
+        elif data.action == "block_title":
+            await db.add_blocklist(user.id, vac.title, "keyword")
+            applied.append(f"title:{vac.title}")
+        else:
+            return {"ok": True, "applied": [], "suggestions": suggestions}
+        return {"ok": True, "applied": applied, "suggestions": suggestions}
+
+    @app.get("/api/filters/{filter_id}/recommendations")
+    async def api_filter_recommendations(filter_id: int):
+        if not scheduler:
+            return {"filter_id": filter_id, "recommendations": []}
+        diagnostics = await scheduler.diagnose_filter(filter_id)
+        if not diagnostics.get("ok"):
+            return JSONResponse(diagnostics, status_code=404)
+        recommendations = []
+        total_raw = sum(site.get("raw", 0) for site in diagnostics.get("sites", []))
+        total_passed = sum(site.get("passed", 0) for site in diagnostics.get("sites", []))
+        total_noise = sum(site.get("rejected", {}).get("noise", 0) for site in diagnostics.get("sites", []))
+        total_keyword = sum(site.get("rejected", {}).get("keyword", 0) for site in diagnostics.get("sites", []))
+        if total_raw > 0 and total_passed == 0:
+            recommendations.append({
+                "type": "no_results",
+                "message": "Фильтр получает вакансии от источников, но все отсекает. Проверь город, зарплату и исключения.",
+            })
+        if total_noise >= 3:
+            recommendations.append({
+                "type": "noise",
+                "message": "Много нерелевантных вакансий. Добавь шумовые слова в исключения или используй более точную должность.",
+            })
+        if total_raw > 0 and total_keyword / total_raw > 0.8:
+            recommendations.append({
+                "type": "keywords",
+                "message": "Большинство вакансий не проходит по ключевым словам. Возможно, запрос слишком широкий для источников.",
+            })
+        return {"filter_id": filter_id, "recommendations": recommendations, "diagnostics": diagnostics}
 
     @app.delete("/api/saved/{saved_id}")
     async def api_saved_delete(saved_id: int):

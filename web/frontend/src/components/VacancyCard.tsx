@@ -1,5 +1,5 @@
 import { memo, useMemo, useState } from 'react'
-import { BookmarkPlus, Ban, ExternalLink, Flame, Sparkles } from 'lucide-react'
+import { BookmarkPlus, Ban, ExternalLink, Flame, Sparkles, ThumbsDown } from 'lucide-react'
 import type { VacancyResult, AppConfig } from '../types'
 import { api } from '../api'
 import { toast } from './toastBus'
@@ -35,6 +35,7 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
   const [expanded, setExpanded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [blocking, setBlocking] = useState(false)
+  const [reporting, setReporting] = useState(false)
 
   const source = sourceStyles[vacancy.source] || { label: vacancy.source, className: 'bg-slate-500/10 text-slate-300 border-slate-500/20' }
   const empLabel = vacancy.employment_type ? config.employment_types[vacancy.employment_type] || vacancy.employment_type : null
@@ -83,6 +84,26 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
     }
   }
 
+  const handleBadResult = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (reporting) return
+    setReporting(true)
+    try {
+      const data = await api.reportBadVacancy(vacancy.id, vacancy.filter_id)
+      if (data.applied.length > 0) {
+        toast.success(`Добавлено в исключения: ${data.applied.join(', ')}`)
+      } else if (data.suggestions.length > 0) {
+        toast.success(`Есть предложения: ${data.suggestions.join(', ')}`)
+      } else {
+        toast.success('Отзыв учтен')
+      }
+    } catch {
+      toast.error('Не удалось отправить отзыв')
+    } finally {
+      setReporting(false)
+    }
+  }
+
   const isFresh = vacancy.published_at
     ? Date.now() - new Date(vacancy.published_at).getTime() <= 1000 * 60 * 60 * 12
     : false
@@ -111,6 +132,11 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${source.className}`}>
             {source.label}
           </span>
+          {typeof vacancy.score === 'number' && (
+            <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[color:var(--surface-elevated)] px-2 py-0.5 text-[10px] font-semibold text-secondary">
+              {vacancy.score}
+            </span>
+          )}
           {isFresh && (
             <span className="inline-flex items-center gap-1 rounded-full border border-rose-400/25 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold text-rose-300">
               <Flame className="h-3 w-3" />
@@ -169,7 +195,7 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
       <div className="mt-auto" />
 
       {showActions && (
-        <div className="mt-3 grid grid-cols-3 gap-2 pt-3">
+        <div className="mt-3 grid grid-cols-4 gap-2 pt-3">
           <a
             href={vacancy.url}
             target="_blank"
@@ -198,6 +224,15 @@ const VacancyCard = memo(function VacancyCard({ vacancy, config, showActions = t
           >
             <Ban className="h-3.5 w-3.5" />
             <span className="btn-text">{blocking ? '...' : 'Скрыть'}</span>
+          </button>
+          <button
+            onClick={handleBadResult}
+            disabled={reporting}
+            className="focus-ring col-span-1 inline-flex h-9 min-w-0 items-center justify-center gap-1 rounded-lg border border-amber-400/25 bg-amber-500/10 px-1 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50 sm:text-xs"
+            aria-label="Отметить вакансию как плохой результат"
+          >
+            <ThumbsDown className="h-3.5 w-3.5" />
+            <span className="btn-text">{reporting ? '...' : 'Плохая'}</span>
           </button>
         </div>
       )}

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Search, History, Bookmark, BarChart3 } from 'lucide-react'
+import { Search, History, Bookmark, BarChart3, SlidersHorizontal } from 'lucide-react'
 
 type TabItem = {
   key: string
@@ -20,6 +20,7 @@ const iconMap: Record<string, ReactNode> = {
   history: <History className="h-4 w-4" />,
   saved: <Bookmark className="h-4 w-4" />,
   stats: <BarChart3 className="h-4 w-4" />,
+  control: <SlidersHorizontal className="h-4 w-4" />,
 }
 
 export default function Tabs({ tabs, active, onTabChange, variant = 'sidebar' }: TabsProps) {
@@ -29,7 +30,7 @@ export default function Tabs({ tabs, active, onTabChange, variant = 'sidebar' }:
     <nav
       role="tablist"
       aria-orientation={isSidebar ? 'vertical' : 'horizontal'}
-      className={isSidebar ? 'flex flex-col gap-1' : 'grid grid-cols-4 gap-1'}
+      className={isSidebar ? 'flex flex-col gap-1' : 'grid grid-cols-5 gap-1'}
     >
       {tabs.map((tab) => {
         const isActive = active === tab.key

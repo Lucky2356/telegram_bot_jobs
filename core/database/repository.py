@@ -1,9 +1,19 @@
 import json
-from datetime import datetime, timezone
-from sqlalchemy import select, delete, func, update
+from datetime import datetime, timezone, timedelta
+from sqlalchemy import select, delete, func, update, case
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from core.database.models import Base, User, VacancyFilter, Vacancy, SentVacancy, SavedVacancy, Blocklist
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from core.database.models import (
+    Base,
+    Blocklist,
+    ParserHealth,
+    SavedVacancy,
+    SentVacancy,
+    TelegramDelivery,
+    User,
+    Vacancy,
+    VacancyFilter,
+)
 from scrapers.base import VacancyData
 
 
@@ -14,6 +24,17 @@ class Database:
 
     async def create_tables(self):
         async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+    async def ensure_legacy_schema_compatibility(self):
+        """Patch legacy SQLite schemas in-place when old columns are missing."""
+        async with self.engine.begin() as conn:
+            if self.engine.url.get_backend_name() != "sqlite":
+                return
+            result = await conn.exec_driver_sql("PRAGMA table_info(blocklist)")
+            cols = {row[1] for row in result.fetchall()}
+            if "created_at" not in cols:
+                await conn.exec_driver_sql("ALTER TABLE blocklist ADD COLUMN created_at DATETIME")
             await conn.run_sync(Base.metadata.create_all)
 
     async def get_or_create_user(self, telegram_id: int, username: str | None = None) -> User:
@@ -210,7 +231,7 @@ class Database:
     async def get_all_active_filters(self) -> list[VacancyFilter]:
         async with self.session_factory() as session:
             result = await session.execute(
-                select(VacancyFilter).where(VacancyFilter.active == True).order_by(VacancyFilter.id)
+                select(VacancyFilter).where(VacancyFilter.active).order_by(VacancyFilter.id)
             )
             return list(result.scalars().all())
 
@@ -223,6 +244,18 @@ class Database:
 
     async def add_vacancy(self, data: VacancyData) -> Vacancy | None:
         async with self.session_factory() as session:
+            similar_stmt = select(Vacancy).where(
+                func.lower(Vacancy.title) == (data.title or "").strip().lower(),
+            )
+            if data.company:
+                similar_stmt = similar_stmt.where(func.lower(Vacancy.company) == data.company.strip().lower())
+            else:
+                similar_stmt = similar_stmt.where(Vacancy.company.is_(None))
+            if data.city:
+                similar_stmt = similar_stmt.where(func.lower(Vacancy.city) == data.city.strip().lower())
+            similar = (await session.execute(similar_stmt.limit(1))).scalar_one_or_none()
+            if similar:
+                return similar
             result = await session.execute(
                 select(Vacancy).where(
                     Vacancy.source == data.source,
@@ -329,7 +362,7 @@ class Database:
     async def get_active_filter_count(self) -> int:
         async with self.session_factory() as session:
             result = await session.execute(
-                select(func.count(VacancyFilter.id)).where(VacancyFilter.active == True)
+                select(func.count(VacancyFilter.id)).where(VacancyFilter.active)
             )
             return result.scalar() or 0
 
@@ -382,6 +415,164 @@ class Database:
             )
             return list(result.all())
 
+    async def enqueue_telegram_delivery(
+        self,
+        user_id: int | None,
+        chat_id: int,
+        vacancy_id: int | None,
+        source: str,
+        url: str,
+        message: str,
+        last_error: str | None = None,
+    ) -> TelegramDelivery:
+        async with self.session_factory() as session:
+            item = TelegramDelivery(
+                user_id=user_id,
+                chat_id=chat_id,
+                vacancy_id=vacancy_id,
+                source=source,
+                url=url,
+                message=message,
+                last_error=last_error,
+            )
+            session.add(item)
+            await session.commit()
+            await session.refresh(item)
+            return item
+
+    async def get_pending_telegram_deliveries(self, limit: int = 50) -> list[TelegramDelivery]:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(TelegramDelivery)
+                .where(TelegramDelivery.status == "pending")
+                .order_by(TelegramDelivery.created_at.asc())
+                .limit(limit)
+            )
+            return list(result.scalars().all())
+
+    async def mark_telegram_delivery_sent(self, delivery_id: int):
+        async with self.session_factory() as session:
+            item = await session.get(TelegramDelivery, delivery_id)
+            if item:
+                item.status = "sent"
+                item.last_error = None
+                item.updated_at = datetime.now(timezone.utc)
+                await session.commit()
+
+    async def mark_telegram_delivery_failed(self, delivery_id: int, error: str):
+        async with self.session_factory() as session:
+            item = await session.get(TelegramDelivery, delivery_id)
+            if item:
+                item.attempts += 1
+                item.last_error = error[:2000]
+                item.updated_at = datetime.now(timezone.utc)
+                if item.attempts >= 10:
+                    item.status = "failed"
+                await session.commit()
+
+    async def get_telegram_delivery_stats(self) -> dict[str, int]:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(TelegramDelivery.status, func.count(TelegramDelivery.id))
+                .group_by(TelegramDelivery.status)
+            )
+            stats = {row[0]: row[1] for row in result.all()}
+            return {
+                "pending": stats.get("pending", 0),
+                "sent": stats.get("sent", 0),
+                "failed": stats.get("failed", 0),
+            }
+
+    async def get_recent_telegram_deliveries(self, limit: int = 30) -> list[TelegramDelivery]:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(TelegramDelivery)
+                .order_by(TelegramDelivery.updated_at.desc(), TelegramDelivery.created_at.desc())
+                .limit(limit)
+            )
+            return list(result.scalars().all())
+
+    async def retry_failed_telegram_deliveries(self) -> int:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                update(TelegramDelivery)
+                .where(TelegramDelivery.status == "failed")
+                .values(status="pending", updated_at=datetime.now(timezone.utc))
+            )
+            await session.commit()
+            return result.rowcount or 0
+
+    async def cleanup_telegram_deliveries(self, days: int = 14) -> int:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        async with self.session_factory() as session:
+            result = await session.execute(
+                delete(TelegramDelivery).where(
+                    TelegramDelivery.status == "sent",
+                    TelegramDelivery.updated_at < cutoff,
+                )
+            )
+            await session.commit()
+            return result.rowcount or 0
+
+    async def upsert_parser_health(self, site: str, ok: bool, count: int, latency_ms: int | None, error: str | None):
+        async with self.session_factory() as session:
+            result = await session.execute(select(ParserHealth).where(ParserHealth.site == site))
+            item = result.scalar_one_or_none()
+            if item is None:
+                item = ParserHealth(site=site)
+                session.add(item)
+            item.ok = ok
+            item.count = count
+            item.latency_ms = latency_ms
+            item.error = error[:2000] if error else None
+            item.checked_at = datetime.now(timezone.utc)
+            await session.commit()
+
+    async def get_parser_health(self) -> list[ParserHealth]:
+        async with self.session_factory() as session:
+            result = await session.execute(select(ParserHealth).order_by(ParserHealth.site.asc()))
+            return list(result.scalars().all())
+
+    async def get_filter_performance(self, days: int = 30) -> list[dict]:
+        async with self.session_factory() as session:
+            from datetime import timedelta
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            result = await session.execute(
+                select(
+                    VacancyFilter.id,
+                    VacancyFilter.name,
+                    func.coalesce(
+                        func.sum(case((SentVacancy.sent_at >= cutoff, 1), else_=0)),
+                        0,
+                    ).label("sent_count"),
+                    func.max(SentVacancy.sent_at).label("last_sent_at"),
+                )
+                .outerjoin(SentVacancy, SentVacancy.filter_id == VacancyFilter.id)
+                .group_by(VacancyFilter.id, VacancyFilter.name)
+                .order_by("sent_count")
+            )
+            return [
+                {
+                    "filter_id": row[0],
+                    "filter_name": row[1],
+                    "sent_count": row[2],
+                    "last_sent_at": row[3].isoformat() if row[3] else None,
+                }
+                for row in result.all()
+            ]
+
+    async def append_filter_exclude_keywords(self, filter_id: int, keywords: list[str]) -> VacancyFilter | None:
+        async with self.session_factory() as session:
+            vf = await session.get(VacancyFilter, filter_id)
+            if vf is None:
+                return None
+            current = vf.get_exclude_keywords()
+            merged = list(dict.fromkeys([*current, *[kw.strip() for kw in keywords if kw and kw.strip()]]))
+            vf.set_exclude_keywords(merged)
+            await session.commit()
+            await session.refresh(vf)
+            return vf
+
     async def get_blocklist(self, user_id: int | None = None) -> list[Blocklist]:
         async with self.session_factory() as session:
             stmt = select(Blocklist)
@@ -420,7 +611,7 @@ class Database:
             await session.commit()
 
     async def cleanup_old_vacancies(self, days: int = 7):
-        from datetime import datetime, timezone, timedelta
+        from datetime import timedelta
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         async with self.session_factory() as session:
             # Get IDs of old vacancies

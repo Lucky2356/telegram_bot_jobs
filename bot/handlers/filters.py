@@ -14,9 +14,7 @@ from bot.keyboards import (
     build_salary_keyboard,
     build_employment_keyboard, build_sites_keyboard,
     build_confirm_keyboard, build_start_keyboard,
-    build_filters_list_keyboard,
-    SALARIES, EXPERIENCE, EMPLOYMENT_TYPES, SITES, KEYWORDS_BY_GROUP,
-    _ID_KW, _ID_GROUP,
+    SALARIES, EXPERIENCE, EMPLOYMENT_TYPES, SITES, _ID_KW, _ID_GROUP,
 )
 from core.database.repository import Database
 

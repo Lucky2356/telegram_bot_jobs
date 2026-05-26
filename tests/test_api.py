@@ -1,18 +1,46 @@
+import asyncio
 import pytest
 from httpx import AsyncClient, ASGITransport
 from core.database.repository import Database
 from core.config import settings
 from web.app import create_web_app
+from web.auth import hash_password
 
 
 class FakeScheduler:
     is_checking = False
+    run_check_called = False
+    run_check_filter_calls: list[int] = []
+    last_results_time = "2026-01-01T00:00:00+00:00"
 
     async def run_check(self):
+        self.run_check_called = True
         return None
 
     async def run_check_for_filter(self, filter_id: int):
+        self.run_check_filter_calls.append(filter_id)
         return None
+
+    async def preview_filter(self, filter_id: int):
+        return [{"id": 1, "filter_id": filter_id, "title": "Preview"}]
+
+    async def diagnose_filter(self, filter_id: int):
+        return {
+            "ok": True,
+            "filter_id": filter_id,
+            "filter_name": "Diagnostics",
+            "queries": ["Python"],
+            "sites": [],
+        }
+
+    def get_event_log(self):
+        return [{"type": "check_started"}]
+
+    def _get_scraper(self, site: str):
+        class FakeScraper:
+            async def search(self, keywords, city=None):
+                return []
+        return FakeScraper()
 
 
 @pytest.fixture
@@ -473,3 +501,275 @@ async def test_events_endpoint_smoke_without_scheduler(db):
         resp = await client.get("/api/events")
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("text/event-stream")
+
+
+@pytest.mark.asyncio
+async def test_check_filter_endpoint_starts_background_task(db):
+    scheduler = FakeScheduler()
+    app = create_web_app(db, scheduler=scheduler)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/api/filters",
+            json={
+                "name": "Background check",
+                "keywords": ["Python"],
+                "city": None,
+                "salary_min": None,
+                "salary_max": None,
+                "employment_types": [],
+                "sites": ["hh"],
+                "experience": None,
+                "exclude_keywords": [],
+            },
+        )
+        filter_id = create_resp.json()["filter"]["id"]
+        resp = await client.post(f"/api/filters/{filter_id}/check")
+        assert resp.status_code == 200
+        await asyncio.sleep(0)
+
+    assert filter_id in scheduler.run_check_filter_calls
+
+
+@pytest.mark.asyncio
+async def test_export_and_import_filters_api(db):
+    app = create_web_app(db, scheduler=FakeScheduler())
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_resp = await client.post(
+            "/api/filters",
+            json={
+                "name": "Exported",
+                "keywords": ["Python"],
+                "city": None,
+                "salary_min": None,
+                "salary_max": None,
+                "employment_types": [],
+                "sites": ["hh"],
+                "experience": None,
+                "exclude_keywords": [],
+            },
+        )
+        assert create_resp.status_code == 200
+
+        export_resp = await client.get("/api/filters/export")
+        assert export_resp.status_code == 200
+        exported = export_resp.json()
+        assert exported["filters"][0]["name"] == "Exported"
+
+        import_resp = await client.post("/api/filters/import", json={"filters": exported["filters"], "replace": False})
+        assert import_resp.status_code == 200
+        assert import_resp.json()["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_preview_diagnostics_health_and_logs_api(db):
+    scheduler = FakeScheduler()
+    app = create_web_app(db, scheduler=scheduler)
+    user = await db.get_or_create_user(telegram_id=1)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="API diagnostic",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        preview_resp = await client.post(f"/api/filters/{vf.id}/preview")
+        diagnostics_resp = await client.get(f"/api/filters/{vf.id}/diagnostics")
+        health_resp = await client.get("/api/parsers/health")
+        logs_resp = await client.get("/api/events/logs")
+
+    assert preview_resp.status_code == 200
+    assert preview_resp.json()["items"][0]["filter_id"] == vf.id
+    assert diagnostics_resp.status_code == 200
+    assert diagnostics_resp.json()["filter_id"] == vf.id
+    assert health_resp.status_code == 200
+    assert logs_resp.status_code == 200
+    assert logs_resp.json()[0]["type"] == "check_started"
+
+
+@pytest.mark.asyncio
+async def test_hashed_web_password_login(db):
+    original_password = settings.WEB_PASSWORD
+    original_hash = settings.WEB_PASSWORD_HASH
+    settings.WEB_PASSWORD = ""
+    settings.WEB_PASSWORD_HASH = hash_password("secret-pass")
+    try:
+        secured_app = create_web_app(db, scheduler=None)
+        transport = ASGITransport(app=secured_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            bad = await client.post("/api/auth/login", json={"password": "bad-pass"})
+            good = await client.post("/api/auth/login", json={"password": "secret-pass"})
+
+        assert bad.status_code == 401
+        assert good.status_code == 200
+        assert good.json()["token"]
+    finally:
+        settings.WEB_PASSWORD = original_password
+        settings.WEB_PASSWORD_HASH = original_hash
+
+
+@pytest.mark.asyncio
+async def test_logout_invalidates_existing_token(db):
+    original_password = settings.WEB_PASSWORD
+    settings.WEB_PASSWORD = "secret-pass"
+    try:
+        secured_app = create_web_app(db, scheduler=None)
+        transport = ASGITransport(app=secured_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            login = await client.post("/api/auth/login", json={"password": "secret-pass"})
+            token = login.json()["token"]
+            ok_before = await client.get("/api/config", headers={"Authorization": f"Bearer {token}"})
+            logout = await client.post("/api/auth/logout", headers={"Authorization": f"Bearer {token}"})
+            denied_after = await client.get("/api/config", headers={"Authorization": f"Bearer {token}"})
+
+        assert ok_before.status_code == 200
+        assert logout.status_code == 200
+        assert denied_after.status_code == 401
+    finally:
+        settings.WEB_PASSWORD = original_password
+
+
+@pytest.mark.asyncio
+async def test_security_headers_and_hash_password_endpoint(app, db):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        config_resp = await client.get("/api/config")
+        hash_resp = await client.post("/api/auth/hash-password", json={"password": "long-secret"})
+
+    assert config_resp.headers["x-content-type-options"] == "nosniff"
+    assert config_resp.headers["x-frame-options"] == "DENY"
+    assert hash_resp.status_code == 200
+    assert hash_resp.json()["hash"].startswith("pbkdf2_sha256$")
+
+
+@pytest.mark.asyncio
+async def test_delivery_status_and_filter_performance_api(db):
+    app = create_web_app(db, scheduler=FakeScheduler())
+    user = await db.get_or_create_user(telegram_id=777)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="Performance",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+
+    from scrapers.base import VacancyData
+    vac = await db.add_vacancy(VacancyData(source="hh", source_id="perf", title="Python Developer", url="url"))
+    await db.mark_sent(user.id, vac.id, filter_id=vf.id)
+    await db.enqueue_telegram_delivery(user.id, user.telegram_id, vac.id, "hh", "url", "message")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        delivery_resp = await client.get("/api/delivery/status")
+        performance_resp = await client.get("/api/filters/performance")
+
+    assert delivery_resp.status_code == 200
+    assert delivery_resp.json()["pending"] == 1
+    assert performance_resp.status_code == 200
+    assert performance_resp.json()[0]["filter_name"] == "Performance"
+
+
+@pytest.mark.asyncio
+async def test_delivery_recent_retry_and_cleanup_api(db):
+    app = create_web_app(db, scheduler=None)
+    user = await db.get_or_create_user(telegram_id=778)
+
+    from scrapers.base import VacancyData
+    vac = await db.add_vacancy(VacancyData(source="hh", source_id="delivery_retry", title="Python Developer", url="url"))
+    item = await db.enqueue_telegram_delivery(user.id, user.telegram_id, vac.id, "hh", "url", "message")
+    for _ in range(10):
+        await db.mark_telegram_delivery_failed(item.id, "network")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        recent_resp = await client.get("/api/delivery/recent")
+        retry_resp = await client.post("/api/delivery/retry")
+        cleanup_resp = await client.post("/api/delivery/cleanup")
+
+    assert recent_resp.status_code == 200
+    assert recent_resp.json()[0]["status"] == "failed"
+    assert retry_resp.status_code == 200
+    assert retry_resp.json()["restored"] == 1
+    assert cleanup_resp.status_code == 200
+    assert cleanup_resp.json()["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_backup_export_api(db):
+    app = create_web_app(db, scheduler=None)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/backup/export")
+        list_resp = await client.get("/api/backup/list")
+
+    assert resp.status_code == 200
+    assert resp.json()["version"] == 1
+    assert "filters" in resp.json()
+    assert list_resp.status_code == 200
+    assert isinstance(list_resp.json(), list)
+
+
+@pytest.mark.asyncio
+async def test_bad_vacancy_feedback_updates_filter_exclusions(app, db):
+    user = await db.get_or_create_user(telegram_id=123)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="Support",
+        keywords=["техподдержка"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+
+    from scrapers.base import VacancyData
+    vac = await db.add_vacancy(VacancyData(source="hh", source_id="bad_feedback", title="Врач-невролог", url="url"))
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            f"/api/vacancies/{vac.id}/feedback",
+            json={"filter_id": vf.id, "action": "exclude_noise"},
+        )
+
+    assert resp.status_code == 200
+    assert "врач" in resp.json()["applied"]
+    updated = await db.get_filter(vf.id)
+    assert "врач" in updated.get_exclude_keywords()
+
+
+@pytest.mark.asyncio
+async def test_filter_recommendations_endpoint(db):
+    scheduler = FakeScheduler()
+    app = create_web_app(db, scheduler=scheduler)
+    user = await db.get_or_create_user(telegram_id=1)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="Recommendations",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get(f"/api/filters/{vf.id}/recommendations")
+
+    assert resp.status_code == 200
+    assert resp.json()["filter_id"] == vf.id

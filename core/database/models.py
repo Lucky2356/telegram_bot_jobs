@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, BigInteger, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint
+from sqlalchemy import Integer, BigInteger, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -124,3 +124,32 @@ class Blocklist(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "pattern", "type", name="uq_blocklist_entry"),
     )
+
+
+class TelegramDelivery(Base):
+    __tablename__ = "telegram_deliveries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    vacancy_id: Mapped[int | None] = mapped_column(ForeignKey("vacancies.id", ondelete="SET NULL"))
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class ParserHealth(Base):
+    __tablename__ = "parser_health"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    ok: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    error: Mapped[str | None] = mapped_column(Text)
+    checked_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)

@@ -67,7 +67,6 @@ async def on_vacancy_similar(callback: CallbackQuery, state: FSMContext, db: Dat
             await callback.answer("Вакансия не найдена", show_alert=True)
             return
         words = vac.title.replace("/", " ").replace("-", " ").split()
-        company_was = vac.company
 
     keywords = [w for w in words if len(w) > 2][:5]
 

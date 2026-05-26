@@ -1,5 +1,4 @@
 import pytest
-from core.database.models import User
 
 
 @pytest.mark.asyncio
@@ -69,7 +68,6 @@ async def test_delete_filter(db):
 async def test_add_vacancy_and_check_sent(db):
     user = await db.get_or_create_user(telegram_id=1)
     from scrapers.base import VacancyData
-    from datetime import datetime, timezone
 
     data = VacancyData(
         source="hh",

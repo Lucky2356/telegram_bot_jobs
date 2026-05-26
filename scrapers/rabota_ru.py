@@ -160,7 +160,9 @@ class RabotaRuScraper(BaseScraper):
             return "no"
         if exp_years:
             years = max(int(y) for y in exp_years)
-            if years <= 1: return "1-3"
-            if years <= 3: return "3-6"
+            if years <= 1:
+                return "1-3"
+            if years <= 3:
+                return "3-6"
             return "6+"
         return None

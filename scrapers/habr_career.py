@@ -137,9 +137,12 @@ class HabrCareerScraper(BaseScraper):
                         exp_years = re.findall(r'(\d+)\s*(?:года|лет|год)', exp_text)
                         if exp_years:
                             years = int(exp_years[0])
-                            if years <= 1: exp_value = "1-3"
-                            elif years <= 3: exp_value = "3-6"
-                            else: exp_value = "6+"
+                            if years <= 1:
+                                exp_value = "1-3"
+                            elif years <= 3:
+                                exp_value = "3-6"
+                            else:
+                                exp_value = "6+"
                 if exp_value is None and len(parts) > 1:
                     for part in parts[1:]:
                         p = part.strip().lower()
@@ -150,9 +153,12 @@ class HabrCareerScraper(BaseScraper):
                             exp_years = re.findall(r'(\d+)\s*(?:года|лет|год)', p)
                             if exp_years:
                                 years = int(exp_years[0])
-                                if years <= 1: exp_value = "1-3"
-                                elif years <= 3: exp_value = "3-6"
-                                else: exp_value = "6+"
+                                if years <= 1:
+                                    exp_value = "1-3"
+                                elif years <= 3:
+                                    exp_value = "3-6"
+                                else:
+                                    exp_value = "6+"
                                 break
 
                 skils = card.select_one("div.vacancy-card__skills")

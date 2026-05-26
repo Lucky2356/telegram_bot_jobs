@@ -26,6 +26,7 @@ const StatsPanel = lazy(() => import('./components/StatsPanel'))
 const HistoryPanel = lazy(() => import('./components/HistoryPanel'))
 const SavedPanel = lazy(() => import('./components/SavedPanel'))
 const BlocklistPanel = lazy(() => import('./components/BlocklistPanel'))
+const ControlPanel = lazy(() => import('./components/ControlPanel'))
 import StatusBar from './components/StatusBar'
 import FilterModal from './components/FilterModal'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -47,6 +48,7 @@ const TABS = [
   { key: 'history', label: 'История', shortLabel: 'История', icon: 'history' },
   { key: 'saved', label: 'Избранное', shortLabel: 'Сейвы', icon: 'saved' },
   { key: 'stats', label: 'Аналитика', shortLabel: 'Метрики', icon: 'stats' },
+  { key: 'control', label: 'Контроль', shortLabel: 'Контроль', icon: 'control' },
 ]
 
 const loadingSpinner = (
@@ -122,6 +124,7 @@ export default function App() {
   }, [])
 
   const handleLogout = useCallback(() => {
+    void api.logout().catch(() => undefined)
     sessionStorage.removeItem('auth_token')
     setToken(null)
   }, [])
@@ -601,6 +604,14 @@ function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
                   </Suspense>
                 </ErrorBoundary>
               ) : loadingSpinner
+            )}
+
+            {activeTab === 'control' && config && (
+              <ErrorBoundary>
+                <Suspense fallback={loadingSpinner}>
+                  <ControlPanel filters={filters} config={config} onRefresh={handleRefresh} />
+                </Suspense>
+              </ErrorBoundary>
             )}
 
             {!config && !configError && loadingSpinner}

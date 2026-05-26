@@ -99,8 +99,10 @@ class TrudvsemScraper(BaseScraper):
                     try:
                         sal_min_val = int(smin) if smin else None
                         sal_max_val = int(smax) if smax else None
-                        if sal_min_val == 0: sal_min_val = None
-                        if sal_max_val == 0: sal_max_val = None
+                        if sal_min_val == 0:
+                            sal_min_val = None
+                        if sal_max_val == 0:
+                            sal_max_val = None
                     except (ValueError, TypeError):
                         sal_min_val = None
                         sal_max_val = None

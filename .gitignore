@@ -11,6 +11,8 @@ vacancies.db
 vacancies.db-journal
 debug.db
 .codex-webtest.db
+backups/
+logs/
 
 # Node
 node_modules/

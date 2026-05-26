@@ -2,6 +2,11 @@ import asyncio
 import sys
 import os
 import logging
+import shutil
+from logging.handlers import RotatingFileHandler
+from datetime import datetime, timezone
+from pathlib import Path
+from sqlalchemy.engine import make_url
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -17,12 +22,25 @@ from web.app import run_web
 for var in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
     os.environ.pop(var, None)
 
+Path("logs").mkdir(exist_ok=True)
+_log_handlers = [
+    logging.StreamHandler(sys.stdout),
+    RotatingFileHandler(
+        "logs/app.log",
+        maxBytes=settings.LOG_MAX_BYTES,
+        backupCount=settings.LOG_BACKUP_COUNT,
+        encoding="utf-8",
+    ),
+]
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    stream=sys.stdout,
+    handlers=_log_handlers,
 )
 logger = logging.getLogger(__name__)
+
+def _is_truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 async def _wait_safely(coro, timeout: float, label: str):
@@ -46,11 +64,29 @@ async def _cancel_tasks(tasks: list[asyncio.Task], timeout: float = 5.0):
         logger.warning("Some background tasks did not stop in %.1f seconds", timeout)
 
 
+def _backup_sqlite_database():
+    try:
+        url = make_url(settings.DATABASE_URL)
+    except Exception:
+        return
+    if not url.drivername.startswith("sqlite") or not url.database or url.database == ":memory:":
+        return
+    source = Path(url.database).resolve()
+    if not source.exists():
+        return
+    backup_dir = Path(settings.BACKUP_DIR)
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    target = backup_dir / f"pre-migration-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.db"
+    shutil.copy2(source, target)
+    logger.info("SQLite backup created before migrations: %s", target)
+
+
 async def main():
     sys.stdout.reconfigure(encoding="utf-8")
     print("=== Job Bot Starting ===", flush=True)
     db = Database(settings.DATABASE_URL)
     try:
+        _backup_sqlite_database()
         from alembic.config import Config
         from alembic import command
         alembic_cfg = Config("alembic.ini")
@@ -66,6 +102,7 @@ async def main():
         logger.warning("Alembic migration failed (%s), using create_tables fallback", e)
         await db.create_tables()
         logger.info("Database initialized via create_tables")
+    await db.ensure_legacy_schema_compatibility()
 
     bot = Bot(
         token=settings.BOT_TOKEN,
@@ -93,6 +130,13 @@ async def main():
         id="db_cleanup",
         replace_existing=True,
     )
+    aps.add_job(
+        scheduler_obj._drain_telegram_delivery_queue,
+        "interval",
+        minutes=5,
+        id="telegram_delivery_retry",
+        replace_existing=True,
+    )
     aps.start()
     logger.info("Scheduler started (every %d hours)", settings.CHECK_INTERVAL_HOURS)
     logger.info("DB cleanup scheduled daily at 03:00")
@@ -100,22 +144,29 @@ async def main():
     logger.info("Starting Telegram bot polling...")
     shutdown_event = asyncio.Event()
     service_tasks: list[asyncio.Task] = []
+    disable_polling = _is_truthy(os.getenv("DISABLE_TELEGRAM_POLLING"))
+    if disable_polling:
+        logger.info("Telegram polling is disabled by DISABLE_TELEGRAM_POLLING")
     try:
-        service_tasks = [
-            asyncio.create_task(
-                dp.start_polling(
-                    bot,
-                    polling_timeout=5,
-                    handle_signals=False,
-                    close_bot_session=False,
-                ),
-                name="telegram_polling",
-            ),
+        service_tasks = []
+        if not disable_polling:
+            service_tasks.append(
+                asyncio.create_task(
+                    dp.start_polling(
+                        bot,
+                        polling_timeout=5,
+                        handle_signals=False,
+                        close_bot_session=False,
+                    ),
+                    name="telegram_polling",
+                )
+            )
+        service_tasks.append(
             asyncio.create_task(
                 run_web(db, scheduler_obj, shutdown_event=shutdown_event),
                 name="web_server",
-            ),
-        ]
+            )
+        )
         done, _ = await asyncio.wait(service_tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
             if task.cancelled():

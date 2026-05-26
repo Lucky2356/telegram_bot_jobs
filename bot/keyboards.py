@@ -135,7 +135,10 @@ KEYWORDS_BY_GROUP: dict[str, dict[str, list[str]]] = {
         "Automation QA": ["Automation QA", "AQA", "QA Automation", "Automation Test"],
         "Нагрузочное тестирование": ["Performance Testing", "Load Testing", "Нагрузочное тестирование", "JMeter"],
         "Тестировщик игр (Game QA)": ["Game QA", "Game Tester", "Тестировщик игр"],
-        "UI/UX тестировщик": ["UI Testing", "UX Testing", "Manual Testing"],
+        "UI/UX тестировщик": [
+            "UI Testing", "UX Testing", "Manual Testing",
+            "Manual QA", "QA Manual", "Тестировщик", "Инженер по тестированию",
+        ],
     },
     "Управление проектами и продуктами": {
         "Project Manager": ["Project Manager", "PM", "Менеджер проектов", "Руководитель проектов"],

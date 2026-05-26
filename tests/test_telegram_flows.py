@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timezone
 
 from bot.handlers.filters import FilterWizard, on_confirm
 from bot.handlers.control import _safe_edit
@@ -179,9 +180,6 @@ async def test_filter_wizard_confirm_creates_filter(db):
     assert filters[0].experience == "1-3"
     assert state.cleared is True
     assert "создан" in callback.message.text
-
-from datetime import datetime, timezone
-
 
 @pytest.mark.asyncio
 async def test_scheduler_rejects_vacancy_outside_salary_range(db):
@@ -384,3 +382,358 @@ def test_scheduler_matches_one_c_with_latin_and_cyrillic_c(db):
     )
 
     assert scheduler._matches_keywords(vacancy, ["1С Программист", "Программист 1С"]) is True
+
+
+def test_scheduler_does_not_match_multiword_keyword_by_scattered_description_tokens(db):
+    scheduler = Scheduler(db, bot=object())
+    vacancy = VacancyData(
+        source="hh",
+        source_id="false-positive-support",
+        title="Врач-невролог",
+        company="Clinic",
+        description="Нужен специалист. Есть технической оснащение и программа поддержки пациентов.",
+        url="https://example.com/neurologist",
+    )
+
+    assert scheduler._matches_keywords(vacancy, ["Специалист технической поддержки"]) is False
+
+
+def test_scheduler_does_not_match_single_word_keyword_only_in_description(db):
+    scheduler = Scheduler(db, bot=object())
+    vacancy = VacancyData(
+        source="superjob",
+        source_id="false-positive-single-token-support",
+        title="Врач общей практики",
+        company="Clinic",
+        description="Есть внутренняя техподдержка для сотрудников.",
+        url="https://example.com/doctor",
+    )
+
+    assert scheduler._matches_keywords(vacancy, ["Техподдержка"]) is False
+
+
+def test_scheduler_matches_description_keyword_when_title_has_role_anchor(db):
+    scheduler = Scheduler(db, bot=object())
+    vacancy = VacancyData(
+        source="habr",
+        source_id="terraform-devops",
+        title="DevOps инженер",
+        company="Cloud Co",
+        description="Инфраструктура как код: Terraform, Kubernetes, CI/CD.",
+        url="https://example.com/devops",
+    )
+
+    assert scheduler._matches_keywords(vacancy, ["Terraform"]) is True
+
+
+@pytest.mark.asyncio
+async def test_scheduler_repeat_check_keeps_results_without_duplicate_telegram_send(db):
+    class RepeatScraper:
+        async def search(self, keywords, city=None):
+            return [VacancyData(
+                source="hh",
+                source_id="repeat-1",
+                title="Python Developer",
+                company="Repeat Co",
+                url="https://example.com/repeat-1",
+                description="Backend development with Python",
+            )]
+
+        async def close(self):
+            pass
+
+    user = await db.get_or_create_user(telegram_id=707)
+    await db.create_filter(
+        user_id=user.id,
+        name="Python repeat",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+
+    scheduler = Scheduler(db, bot=object())
+    scheduler._scrapers["hh"] = RepeatScraper()
+
+    await scheduler.run_check()
+    first_results = scheduler.get_last_results()
+    assert len(first_results) == 1
+    assert user.id in scheduler._user_buffers
+    assert len(scheduler._user_buffers[user.id]) == 1
+
+    scheduler._user_buffers.clear()
+    await scheduler.run_check()
+    second_results = scheduler.get_last_results()
+    assert len(second_results) == 1
+    assert second_results[0]["id"] == first_results[0]["id"]
+    assert user.id not in scheduler._user_buffers
+
+
+@pytest.mark.asyncio
+async def test_scheduler_single_filter_checks_work_for_different_filters_sequentially(db):
+    class MultiFilterScraper:
+        async def search(self, keywords, city=None):
+            query = keywords[0]
+            if "Python" in query:
+                return [VacancyData(
+                    source="hh",
+                    source_id="mf-python",
+                    title="Python Developer",
+                    company="Py Co",
+                    url="https://example.com/mf-python",
+                )]
+            if "Java" in query:
+                return [VacancyData(
+                    source="hh",
+                    source_id="mf-java",
+                    title="Java Developer",
+                    company="Java Co",
+                    url="https://example.com/mf-java",
+                )]
+            return []
+
+        async def close(self):
+            pass
+
+    user = await db.get_or_create_user(telegram_id=808)
+    f1 = await db.create_filter(
+        user_id=user.id,
+        name="Python only",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+    f2 = await db.create_filter(
+        user_id=user.id,
+        name="Java only",
+        keywords=["Java"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+
+    scheduler = Scheduler(db, bot=object())
+    scheduler._scrapers["hh"] = MultiFilterScraper()
+
+    await scheduler.run_check_for_filter(f1.id)
+    results_1 = scheduler.get_last_results()
+    assert len(results_1) == 1
+    assert results_1[0]["filter_id"] == f1.id
+    assert "Python" in results_1[0]["title"]
+
+    await scheduler.run_check_for_filter(f2.id)
+    results_2 = scheduler.get_last_results()
+    assert len(results_2) == 1
+    assert results_2[0]["filter_id"] == f2.id
+    assert "Java" in results_2[0]["title"]
+
+
+@pytest.mark.asyncio
+async def test_scheduler_run_check_collects_results_for_all_active_filters(db):
+    class MultiFilterScraper:
+        async def search(self, keywords, city=None):
+            query = keywords[0]
+            if "Python" in query:
+                return [VacancyData(
+                    source="hh",
+                    source_id="all-python",
+                    title="Python Developer",
+                    company="Py Co",
+                    url="https://example.com/all-python",
+                )]
+            if "Java" in query:
+                return [VacancyData(
+                    source="hh",
+                    source_id="all-java",
+                    title="Java Developer",
+                    company="Java Co",
+                    url="https://example.com/all-java",
+                )]
+            return []
+
+        async def close(self):
+            pass
+
+    user = await db.get_or_create_user(telegram_id=818)
+    python_filter = await db.create_filter(
+        user_id=user.id,
+        name="Python all",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+    java_filter = await db.create_filter(
+        user_id=user.id,
+        name="Java all",
+        keywords=["Java"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+
+    scheduler = Scheduler(db, bot=object())
+    scheduler._scrapers["hh"] = MultiFilterScraper()
+
+    await scheduler.run_check()
+
+    results = scheduler.get_last_results()
+    result_filter_ids = {item["filter_id"] for item in results}
+    assert result_filter_ids == {python_filter.id, java_filter.id}
+    assert {item["title"] for item in results} == {"Python Developer", "Java Developer"}
+
+
+@pytest.mark.asyncio
+async def test_scheduler_single_filter_check_resets_results_for_each_filter(db):
+    class SplitScraper:
+        async def search(self, keywords, city=None):
+            if "Python" in keywords[0]:
+                return [VacancyData(
+                    source="hh",
+                    source_id="only-py",
+                    title="Python Developer",
+                    company="Py Co",
+                    url="https://example.com/only-py",
+                )]
+            return [VacancyData(
+                source="hh",
+                source_id="only-java",
+                title="Java Developer",
+                company="Java Co",
+                url="https://example.com/only-java",
+            )]
+
+        async def close(self):
+            pass
+
+    user = await db.get_or_create_user(telegram_id=909)
+    py_filter = await db.create_filter(
+        user_id=user.id,
+        name="Python",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+    java_filter = await db.create_filter(
+        user_id=user.id,
+        name="Java",
+        keywords=["Java"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+
+    scheduler = Scheduler(db, bot=object())
+    scheduler._scrapers["hh"] = SplitScraper()
+
+    await scheduler.run_check_for_filter(py_filter.id)
+    py_results = scheduler.get_last_results()
+    assert len(py_results) == 1
+    assert py_results[0]["filter_id"] == py_filter.id
+
+    await scheduler.run_check_for_filter(java_filter.id)
+    java_results = scheduler.get_last_results()
+    assert len(java_results) == 1
+    assert java_results[0]["filter_id"] == java_filter.id
+
+
+@pytest.mark.asyncio
+async def test_scheduler_keeps_unknown_employment_type_when_filter_is_set(db):
+    user = await db.get_or_create_user(telegram_id=1001)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="Remote preferred",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=["remote"],
+        sites=["hh"],
+    )
+    scheduler = Scheduler(db, bot=object())
+    vacancy = VacancyData(
+        source="hh",
+        source_id="unknown-emp",
+        title="Python Developer",
+        company="Unknown Emp Co",
+        employment_type=None,
+        url="https://example.com/unknown-emp",
+    )
+
+    await scheduler._process_vacancy(vacancy, vf, user, ["Python"], ["remote"], [], None)
+    assert user.id in scheduler._user_buffers
+    assert len(scheduler._user_buffers[user.id]) == 1
+
+
+@pytest.mark.asyncio
+async def test_scheduler_keeps_unknown_experience_when_filter_is_set(db):
+    user = await db.get_or_create_user(telegram_id=1002)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="1-3 years preferred",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+        experience="1-3",
+    )
+    scheduler = Scheduler(db, bot=object())
+    vacancy = VacancyData(
+        source="hh",
+        source_id="unknown-exp",
+        title="Python Developer",
+        company="Unknown Exp Co",
+        experience=None,
+        url="https://example.com/unknown-exp",
+    )
+
+    await scheduler._process_vacancy(vacancy, vf, user, ["Python"], [], [], "1-3")
+    assert user.id in scheduler._user_buffers
+    assert len(scheduler._user_buffers[user.id]) == 1
+
+
+@pytest.mark.asyncio
+async def test_scheduler_diagnostics_reports_scraper_errors_with_cache_wrapper(db):
+    class BrokenScraper:
+        async def search(self, keywords, city=None):
+            raise RuntimeError("source is down")
+
+        async def close(self):
+            pass
+
+    user = await db.get_or_create_user(telegram_id=1003)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="Broken source",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=[],
+        sites=["hh"],
+    )
+    scheduler = Scheduler(db, bot=object())
+    scheduler._scrapers["hh"] = BrokenScraper()
+
+    diagnostics = await scheduler.diagnose_filter(vf.id)
+
+    assert diagnostics["ok"] is True
+    assert diagnostics["sites"][0]["error"] == "source is down"

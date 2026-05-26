@@ -5,7 +5,6 @@ import pytest_asyncio
 from typing import AsyncGenerator
 
 from core.database.repository import Database
-from core.database.models import Base
 
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
