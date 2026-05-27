@@ -53,16 +53,18 @@ class SuperJobScraper(BaseScraper):
                         parts.append(f"до {payment_to:,}".replace(",", " "))
                     salary_text = " ".join(parts) + f" {str(currency or 'rub').upper()}"
 
-                emp_type = None
+                emp_types = []
                 tof = item.get("type_of_work", {})
                 if tof and tof.get("id"):
-                    emp_type = {1: "full", 2: "part", 3: "project", 4: "part", 5: "part", 6: "remote"}.get(tof.get("id"))
+                    if mapped := {1: "full", 2: "part", 3: "project", 4: "part", 5: "part", 6: "remote"}.get(tof.get("id")):
+                        emp_types.append(mapped)
 
-                if emp_type is None:
-                    EMPLOYMENT_MAP = {1: "full", 2: "part", 3: "project", 4: "internship"}
-                    emp_form = item.get("employment", {})
-                    if emp_form and emp_form.get("id") in EMPLOYMENT_MAP:
-                        emp_type = EMPLOYMENT_MAP.get(emp_form.get("id"))
+                EMPLOYMENT_MAP = {1: "full", 2: "part", 3: "project", 4: "internship"}
+                emp_form = item.get("employment", {})
+                if emp_form and emp_form.get("id") in EMPLOYMENT_MAP:
+                    emp_types.append(EMPLOYMENT_MAP[emp_form.get("id")])
+                emp_types = list(dict.fromkeys(emp_types))
+                emp_type = "remote" if "remote" in emp_types else (emp_types[0] if emp_types else None)
 
                 exp = None
                 sj_exp = item.get("experience", {})
@@ -83,7 +85,7 @@ class SuperJobScraper(BaseScraper):
                     source="superjob", source_id=str(item["id"]), title=item.get("profession", ""),
                     company=item.get("firm_name") or (item.get("firm", {}).get("title") if item.get("firm") else None),
                     salary_text=salary_text, salary_min=payment_from, salary_max=payment_to,
-                    employment_type=emp_type, experience=exp, city=city_name,
+                    employment_type=emp_type, employment_types=emp_types, experience=exp, city=city_name,
                     description=clean_html(item.get("candidat", "")), url=item.get("link", ""), published_at=published,
                 ))
 

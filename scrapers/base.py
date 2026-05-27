@@ -13,6 +13,7 @@ class VacancyData:
     salary_min: int | None = None
     salary_max: int | None = None
     employment_type: str | None = None
+    employment_types: list[str] | None = None
     experience: str | None = None
     city: str | None = None
     description: str | None = None

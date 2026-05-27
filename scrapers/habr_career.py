@@ -62,12 +62,16 @@ class HabrCareerScraper(BaseScraper):
                 m_id = re.search(r'/vacancies/(\d+)', href)
                 source_id = m_id.group(1) if m_id else href.split("/")[-1].split("?")[0]
 
-                title = ""
-                title_el = card.select_one("[class*=title]")
-                if title_el:
-                    title = title_el.get_text(strip=True)
+                title = link_tag.get_text(strip=True)
                 if not title:
-                    title = link_tag.get_text(strip=True) or card.get_text(strip=True)[:80]
+                    title_el = (
+                        card.select_one(".vacancy-card__title")
+                        or card.select_one("[class*=vacancy][class*=title]")
+                    )
+                    if title_el:
+                        title = title_el.get_text(strip=True)
+                if not title:
+                    title = card.get_text(strip=True)[:80]
 
                 company = None
                 for sel in [
@@ -98,11 +102,13 @@ class HabrCareerScraper(BaseScraper):
 
                 city_name = None
                 emp_type = None
+                emp_types = []
                 exp_value = None
                 _emp_type_kw = {"удаленно": "remote", "удаленная": "remote",
                                 "полный": "full", "полная": "full",
                                 "частичная": "part", "проект": "project",
                                 "стажировка": "internship"}
+                parts = []
                 meta = card.select_one("div.vacancy-card__meta")
                 if meta:
                     meta_text = meta.get_text(" ", strip=True)
@@ -115,18 +121,17 @@ class HabrCareerScraper(BaseScraper):
                         else:
                             for key, val in _emp_type_kw.items():
                                 if key in candidate.lower():
-                                    emp_type = val
+                                    emp_types.append(val)
                                     break
                     if len(parts) > 1:
                         for part in parts[1:]:
                             p = part.strip().lower()
                             for key, val in _emp_type_kw.items():
                                 if key in p:
-                                    if emp_type is None:
-                                        emp_type = val
+                                    emp_types.append(val)
                                     break
-                            if emp_type:
-                                break
+                emp_types = list(dict.fromkeys(emp_types))
+                emp_type = "remote" if "remote" in emp_types else (emp_types[0] if emp_types else None)
 
                 exp_el = card.select_one("[class*=experience]") or card.select_one("[class*=exp-]")
                 if exp_el:
@@ -182,6 +187,7 @@ class HabrCareerScraper(BaseScraper):
                     salary_min=salary_min,
                     salary_max=salary_max,
                     employment_type=emp_type,
+                    employment_types=emp_types,
                     experience=exp_value,
                     city=city_name,
                     description=desc,

@@ -108,18 +108,21 @@ class HHScraper(BaseScraper):
                     if parts:
                         salary_text = " ".join(parts) + f" {cur}"
 
-                emp_type = None
+                emp_types = []
                 employment = item.get("employment")
                 if employment:
                     emp_id = employment.get("id")
                     mapping = {"full": "full", "part": "part", "project": "project",
                                "probation": "internship", "volunteer": "internship",
                                "temporary": "project"}
-                    emp_type = mapping.get(emp_id)
+                    if mapped := mapping.get(emp_id):
+                        emp_types.append(mapped)
 
                 schedule = item.get("schedule")
                 if schedule and schedule.get("id") == "remote":
-                    emp_type = "remote"
+                    emp_types.append("remote")
+                emp_types = list(dict.fromkeys(emp_types))
+                emp_type = "remote" if "remote" in emp_types else (emp_types[0] if emp_types else None)
 
                 exp = None
                 experience = item.get("experience")
@@ -146,7 +149,7 @@ class HHScraper(BaseScraper):
                     source="hh", source_id=str(item["id"]), title=item.get("name", ""),
                     company=item.get("employer", {}).get("name") if item.get("employer") else None,
                     salary_text=salary_text, salary_min=salary_min, salary_max=salary_max,
-                    employment_type=emp_type, experience=exp, city=city_name,
+                    employment_type=emp_type, employment_types=emp_types, experience=exp, city=city_name,
                     description=desc, url=item.get("alternate_url", ""), published_at=published,
                 ))
 
@@ -193,6 +196,7 @@ class HHScraper(BaseScraper):
                 salary_text = self._extract_html_salary(text)
                 salary_min, salary_max = extract_salary_numbers(salary_text or "")
 
+                employment_types = self._detect_html_employment_types(text)
                 results.append(VacancyData(
                     source="hh",
                     source_id=source_id,
@@ -201,7 +205,8 @@ class HHScraper(BaseScraper):
                     salary_text=salary_text,
                     salary_min=salary_min,
                     salary_max=salary_max,
-                    employment_type=self._detect_html_employment(text),
+                    employment_type="remote" if "remote" in employment_types else (employment_types[0] if employment_types else None),
+                    employment_types=employment_types,
                     experience=self._detect_html_experience(text),
                     city=city_el.get_text(" ", strip=True) if city_el else None,
                     description=clean_html(text),
@@ -217,14 +222,21 @@ class HHScraper(BaseScraper):
         return re.sub(r"\s+", " ", match.group(1).replace("\u202f", " ")).strip()
 
     def _detect_html_employment(self, text: str) -> str | None:
+        types = self._detect_html_employment_types(text)
+        return "remote" if "remote" in types else (types[0] if types else None)
+
+    def _detect_html_employment_types(self, text: str) -> list[str]:
         text_lower = text.casefold()
+        types = []
         if "удал" in text_lower or "дистанц" in text_lower:
-            return "remote"
+            types.append("remote")
         if "частич" in text_lower:
-            return "part"
+            types.append("part")
         if "стаж" in text_lower:
-            return "internship"
-        return None
+            types.append("internship")
+        if "полная занятость" in text_lower or "полный день" in text_lower:
+            types.append("full")
+        return list(dict.fromkeys(types))
 
     def _detect_html_experience(self, text: str) -> str | None:
         text_lower = text.casefold()

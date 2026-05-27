@@ -430,7 +430,7 @@ class Scheduler:
             return
         if emp_types:
             # Keep vacancies with unknown employment type; reject only explicit mismatches.
-            if vac_data.employment_type and vac_data.employment_type not in emp_types:
+            if not self._matches_employment(vac_data, emp_types):
                 return
         if vf.city:
             city_label = CITIES.get(vf.city, vf.city).casefold()
@@ -517,7 +517,7 @@ class Scheduler:
             return "noise"
         if exclude_keywords and self._has_excluded(vac_data, exclude_keywords):
             return "exclude"
-        if emp_types and vac_data.employment_type and vac_data.employment_type not in emp_types:
+        if emp_types and not self._matches_employment(vac_data, emp_types):
             return "employment"
         if vf.city:
             city_label = CITIES.get(vf.city, vf.city).casefold()
@@ -584,6 +584,31 @@ class Scheduler:
     def _has_excluded(self, vac: VacancyData, exclude_keywords: list[str]) -> bool:
         haystack = self._normalize_search_text(f"{vac.title} {vac.description or ''}")
         return any(self._normalize_search_text(kw.strip()) in haystack for kw in exclude_keywords if kw and kw.strip())
+
+    def _matches_employment(self, vac: VacancyData, selected_types: list[str]) -> bool:
+        if not selected_types:
+            return True
+        candidate_type = self._primary_employment_type(vac)
+        if not candidate_type:
+            return False
+        return candidate_type in selected_types
+
+    def _primary_employment_type(self, vac: VacancyData) -> str | None:
+        if vac.employment_type:
+            return vac.employment_type
+
+        haystack = self._normalize_search_text(f"{vac.title} {vac.description or ''}")
+        if any(word in haystack for word in ("удален", "удалён", "дистанц", "remote")):
+            return "remote"
+        if any(word in haystack for word in ("частичная", "неполная", "part time", "part-time")):
+            return "part"
+        if any(word in haystack for word in ("проектная", "проект", "contract")):
+            return "project"
+        if any(word in haystack for word in ("стажировка", "internship", "intern")):
+            return "internship"
+        if any(word in haystack for word in ("полная занятость", "полный день", "full time", "full-time")):
+            return "full"
+        return None
 
     def _normalize_search_text(self, text: str) -> str:
         return text.casefold().replace("1\u0441", "1c")

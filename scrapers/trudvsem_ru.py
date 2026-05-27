@@ -65,7 +65,7 @@ class TrudvsemScraper(BaseScraper):
                     elif v.get("salary"):
                         salary_text = f"{v['salary']} {salary_currency}"
 
-                    emp_type = None
+                    emp_types = []
                     emp = v.get("employment", "")
                     mapping = {
                         "дистанционная": "remote", "удаленная": "remote", "удаленно": "remote",
@@ -78,8 +78,9 @@ class TrudvsemScraper(BaseScraper):
                         emp_lower = emp.lower()
                         for key, val in mapping.items():
                             if key in emp_lower:
-                                emp_type = val
-                                break
+                                emp_types.append(val)
+                    emp_types = list(dict.fromkeys(emp_types))
+                    emp_type = "remote" if "remote" in emp_types else (emp_types[0] if emp_types else None)
 
                     published = None
                     date_str = v.get("creation-date", "")
@@ -132,6 +133,7 @@ class TrudvsemScraper(BaseScraper):
                         salary_min=sal_min_val,
                         salary_max=sal_max_val,
                         employment_type=emp_type,
+                        employment_types=emp_types,
                         experience=exp_value,
                         city=city_name,
                         description=desc,

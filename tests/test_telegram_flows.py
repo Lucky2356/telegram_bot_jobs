@@ -654,7 +654,7 @@ async def test_scheduler_single_filter_check_resets_results_for_each_filter(db):
 
 
 @pytest.mark.asyncio
-async def test_scheduler_keeps_unknown_employment_type_when_filter_is_set(db):
+async def test_scheduler_rejects_unknown_employment_type_when_filter_is_set(db):
     user = await db.get_or_create_user(telegram_id=1001)
     vf = await db.create_filter(
         user_id=user.id,
@@ -677,8 +677,125 @@ async def test_scheduler_keeps_unknown_employment_type_when_filter_is_set(db):
     )
 
     await scheduler._process_vacancy(vacancy, vf, user, ["Python"], ["remote"], [], None)
+    assert user.id not in scheduler._user_buffers
+
+
+@pytest.mark.asyncio
+async def test_scheduler_infers_employment_type_from_description(db):
+    user = await db.get_or_create_user(telegram_id=1006)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="Remote",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=["remote"],
+        sites=["hh"],
+    )
+    scheduler = Scheduler(db, bot=object())
+    vacancy = VacancyData(
+        source="hh",
+        source_id="remote-in-description",
+        title="Python Developer",
+        company="Remote Text Co",
+        employment_type=None,
+        description="Работа полностью удаленно, гибкий график",
+        url="https://example.com/remote-in-description",
+    )
+
+    await scheduler._process_vacancy(vacancy, vf, user, ["Python"], ["remote"], [], None)
+
     assert user.id in scheduler._user_buffers
     assert len(scheduler._user_buffers[user.id]) == 1
+
+
+@pytest.mark.asyncio
+async def test_scheduler_rejects_remote_primary_vacancy_for_full_filter(db):
+    user = await db.get_or_create_user(telegram_id=1004)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="Full time",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=["full"],
+        sites=["hh"],
+    )
+    scheduler = Scheduler(db, bot=object())
+    vacancy = VacancyData(
+        source="hh",
+        source_id="remote-full",
+        title="Python Developer",
+        company="Remote Full Co",
+        employment_type="remote",
+        employment_types=["full", "remote"],
+        url="https://example.com/remote-full",
+    )
+
+    await scheduler._process_vacancy(vacancy, vf, user, ["Python"], ["full"], [], None)
+
+    assert user.id not in scheduler._user_buffers
+
+
+@pytest.mark.asyncio
+async def test_scheduler_matches_remote_primary_vacancy_to_remote_filter(db):
+    user = await db.get_or_create_user(telegram_id=1007)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="Remote",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=["remote"],
+        sites=["hh"],
+    )
+    scheduler = Scheduler(db, bot=object())
+    vacancy = VacancyData(
+        source="hh",
+        source_id="remote-full-for-remote",
+        title="Python Developer",
+        company="Remote Full Co",
+        employment_type="remote",
+        employment_types=["full", "remote"],
+        url="https://example.com/remote-full-for-remote",
+    )
+
+    await scheduler._process_vacancy(vacancy, vf, user, ["Python"], ["remote"], [], None)
+
+    assert user.id in scheduler._user_buffers
+    assert len(scheduler._user_buffers[user.id]) == 1
+
+
+@pytest.mark.asyncio
+async def test_scheduler_rejects_remote_only_vacancy_for_full_filter(db):
+    user = await db.get_or_create_user(telegram_id=1005)
+    vf = await db.create_filter(
+        user_id=user.id,
+        name="Full only",
+        keywords=["Python"],
+        city=None,
+        salary_min=None,
+        salary_max=None,
+        employment_types=["full"],
+        sites=["hh"],
+    )
+    scheduler = Scheduler(db, bot=object())
+    vacancy = VacancyData(
+        source="hh",
+        source_id="remote-only",
+        title="Python Developer",
+        company="Remote Only Co",
+        employment_type="remote",
+        employment_types=["remote"],
+        url="https://example.com/remote-only",
+    )
+
+    await scheduler._process_vacancy(vacancy, vf, user, ["Python"], ["full"], [], None)
+
+    assert user.id not in scheduler._user_buffers
 
 
 @pytest.mark.asyncio
@@ -737,3 +854,19 @@ async def test_scheduler_diagnostics_reports_scraper_errors_with_cache_wrapper(d
 
     assert diagnostics["ok"] is True
     assert diagnostics["sites"][0]["error"] == "source is down"
+
+
+def test_habr_parser_keeps_card_without_meta():
+    from scrapers.habr_career import HabrCareerScraper
+
+    html = """
+    <div class="vacancy-card">
+      <a href="/vacancies/123">Python Developer</a>
+      <div class="vacancy-card__company-title">ACME</div>
+    </div>
+    """
+    scraper = HabrCareerScraper.__new__(HabrCareerScraper)
+    vacancies = scraper._parse_html(html)
+
+    assert len(vacancies) == 1
+    assert vacancies[0].title == "Python Developer"

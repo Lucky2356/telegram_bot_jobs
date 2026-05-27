@@ -106,7 +106,8 @@ class RabotaRuScraper(BaseScraper):
             published = None
             if card:
                 card_text = card.get_text(" ", strip=True)
-                emp_type = self._detect_employment_type(card_text)
+                emp_types = self._detect_employment_types(card_text)
+                emp_type = "remote" if "remote" in emp_types else (emp_types[0] if emp_types else None)
                 exp_value = self._detect_experience(card_text)
                 desc_el = card.select_one("[class*=description]") or card.select_one("[class*=desc]") or card.select_one("[data-qa*=vacancy-description]")
                 if desc_el:
@@ -128,6 +129,7 @@ class RabotaRuScraper(BaseScraper):
                 salary_min=salary_min,
                 salary_max=salary_max,
                 employment_type=emp_type,
+                employment_types=emp_types,
                 experience=exp_value,
                 city=city_name,
                 description=desc_value,
@@ -138,20 +140,23 @@ class RabotaRuScraper(BaseScraper):
         return results
 
     def _detect_employment_type(self, text: str) -> str | None:
+        types = self._detect_employment_types(text)
+        return "remote" if "remote" in types else (types[0] if types else None)
+
+    def _detect_employment_types(self, text: str) -> list[str]:
         text_lower = text.lower()
-        # Check for remote first (has priority)
+        types = []
         if "удаленна" in text_lower or "удаленно" in text_lower or "дистанци" in text_lower:
-            return "remote"
-        # Then check for specific employment type phrases
+            types.append("remote")
         if "частич" in text_lower or "неполн" in text_lower:
-            return "part"
+            types.append("part")
         if "проект" in text_lower:
-            return "project"
+            types.append("project")
         if "стажировк" in text_lower:
-            return "internship"
+            types.append("internship")
         if "полный рабочий" in text_lower or "полная занятость" in text_lower or "полный день" in text_lower:
-            return "full"
-        return None
+            types.append("full")
+        return list(dict.fromkeys(types))
 
     def _detect_experience(self, text: str) -> str | None:
         text_lower = text.lower()
