@@ -236,9 +236,12 @@ SITES: dict[str, str] = {
 }
 
 
-def get_synonyms(display_names: list[str]) -> list[str]:
-    """Convert display names to all search synonyms for API queries.
-    Also matches any keyword to its synonym group (e.g., 'SysAdmin' -> all Russian forms)."""
+def _build_synonym_lookup() -> dict[str, list[str]]:
+    """Map every display name and synonym to its full synonym group.
+
+    KEYWORDS_BY_GROUP is static, so this is built once at import instead of
+    on every get_synonyms() call (which happens several times per filter check).
+    """
     lookup: dict[str, list[str]] = {}
     for group in KEYWORDS_BY_GROUP.values():
         for display, syns in group.items():
@@ -246,11 +249,19 @@ def get_synonyms(display_names: list[str]) -> list[str]:
             for s in syns:
                 if s not in lookup:
                     lookup[s] = syns
+    return lookup
 
+
+_SYNONYM_LOOKUP = _build_synonym_lookup()
+
+
+def get_synonyms(display_names: list[str]) -> list[str]:
+    """Convert display names to all search synonyms for API queries.
+    Also matches any keyword to its synonym group (e.g., 'SysAdmin' -> all Russian forms)."""
     result: list[str] = []
     for name in display_names:
-        if name in lookup:
-            result.extend(lookup[name])
+        if name in _SYNONYM_LOOKUP:
+            result.extend(_SYNONYM_LOOKUP[name])
         else:
             result.append(name)
     return list(dict.fromkeys(result))

@@ -429,7 +429,9 @@ class Scheduler:
         if exclude_keywords and self._has_excluded(vac_data, exclude_keywords):
             return
         if emp_types:
-            # Keep vacancies with unknown employment type; reject only explicit mismatches.
+            # Strict match: the vacancy's employment type (declared, or inferred
+            # from its text) must be one the user selected. Unknown types are
+            # rejected so the filter only shows the formats the user asked for.
             if not self._matches_employment(vac_data, emp_types):
                 return
         if vf.city:
@@ -437,8 +439,8 @@ class Scheduler:
             if not vac_data.city or city_label not in vac_data.city.casefold():
                 return
         if experience:
-            # Keep vacancies with unknown experience; reject only explicit mismatches.
-            if vac_data.experience and vac_data.experience != experience:
+            # Strict match: reject vacancies with a different or unknown experience level.
+            if not vac_data.experience or vac_data.experience != experience:
                 return
         if vf.salary_min is not None or vf.salary_max is not None:
             cand_min = vac_data.salary_min or 0
@@ -523,7 +525,7 @@ class Scheduler:
             city_label = CITIES.get(vf.city, vf.city).casefold()
             if not vac_data.city or city_label not in vac_data.city.casefold():
                 return "city"
-        if experience and vac_data.experience and vac_data.experience != experience:
+        if experience and (not vac_data.experience or vac_data.experience != experience):
             return "experience"
         if vf.salary_min is not None or vf.salary_max is not None:
             cand_min = vac_data.salary_min or 0

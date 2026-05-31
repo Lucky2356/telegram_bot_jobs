@@ -799,11 +799,11 @@ async def test_scheduler_rejects_remote_only_vacancy_for_full_filter(db):
 
 
 @pytest.mark.asyncio
-async def test_scheduler_keeps_unknown_experience_when_filter_is_set(db):
+async def test_scheduler_rejects_unknown_experience_when_filter_is_set(db):
     user = await db.get_or_create_user(telegram_id=1002)
     vf = await db.create_filter(
         user_id=user.id,
-        name="1-3 years preferred",
+        name="1-3 years only",
         keywords=["Python"],
         city=None,
         salary_min=None,
@@ -813,7 +813,7 @@ async def test_scheduler_keeps_unknown_experience_when_filter_is_set(db):
         experience="1-3",
     )
     scheduler = Scheduler(db, bot=object())
-    vacancy = VacancyData(
+    unknown = VacancyData(
         source="hh",
         source_id="unknown-exp",
         title="Python Developer",
@@ -821,9 +821,28 @@ async def test_scheduler_keeps_unknown_experience_when_filter_is_set(db):
         experience=None,
         url="https://example.com/unknown-exp",
     )
+    mismatch = VacancyData(
+        source="hh",
+        source_id="senior-exp",
+        title="Python Developer",
+        company="Senior Co",
+        experience="6+",
+        url="https://example.com/senior-exp",
+    )
+    match = VacancyData(
+        source="hh",
+        source_id="match-exp",
+        title="Python Developer",
+        company="Match Exp Co",
+        experience="1-3",
+        url="https://example.com/match-exp",
+    )
 
-    await scheduler._process_vacancy(vacancy, vf, user, ["Python"], [], [], "1-3")
-    assert user.id in scheduler._user_buffers
+    await scheduler._process_vacancy(unknown, vf, user, ["Python"], [], [], "1-3")
+    await scheduler._process_vacancy(mismatch, vf, user, ["Python"], [], [], "1-3")
+    assert user.id not in scheduler._user_buffers
+
+    await scheduler._process_vacancy(match, vf, user, ["Python"], [], [], "1-3")
     assert len(scheduler._user_buffers[user.id]) == 1
 
 
