@@ -1,4 +1,5 @@
 import re
+import logging
 import httpx
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -6,6 +7,7 @@ from scrapers.base import BaseScraper, VacancyData
 from bot.keyboards import CITIES
 from utils.text_cleaner import extract_salary_numbers, clean_html
 
+logger = logging.getLogger(__name__)
 
 RABOTA_URL = "https://www.rabota.ru/vacancy/search"
 
@@ -34,7 +36,8 @@ class RabotaRuScraper(BaseScraper):
                     if v.source_id not in seen:
                         seen.add(v.source_id)
                         results.append(v)
-            except Exception:
+            except Exception as e:
+                logger.warning("rabota.ru request failed (page %d): %s", page, e)
                 break
         return results
 

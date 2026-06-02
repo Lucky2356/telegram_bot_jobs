@@ -1,3 +1,4 @@
+import logging
 import httpx
 from datetime import datetime
 from scrapers.base import BaseScraper, VacancyData
@@ -5,6 +6,7 @@ from core.config import settings
 from bot.keyboards import CITIES
 from utils.text_cleaner import clean_html
 
+logger = logging.getLogger(__name__)
 
 SJ_API = "https://api.superjob.ru/2.0/vacancies/"
 SJ_HEADERS = {"X-Api-App-Id": settings.SUPERJOB_API_KEY}
@@ -33,7 +35,8 @@ class SuperJobScraper(BaseScraper):
                 resp = await self.client.get(SJ_API, params=params)
                 resp.raise_for_status()
                 data = resp.json()
-            except Exception:
+            except Exception as e:
+                logger.warning("SuperJob API request failed (page %d): %s", page, e)
                 break
 
             for item in data.get("objects", []):

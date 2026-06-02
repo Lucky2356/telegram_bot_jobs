@@ -1,11 +1,13 @@
 import httpx
 import re
+import logging
 from datetime import datetime
 from bs4 import BeautifulSoup
 from scrapers.base import BaseScraper, VacancyData
 from bot.keyboards import CITIES
 from utils.text_cleaner import extract_salary_numbers
 
+logger = logging.getLogger(__name__)
 
 HABR_URL = "https://career.habr.com/vacancies"
 
@@ -35,7 +37,8 @@ class HabrCareerScraper(BaseScraper):
                     if v.source_id not in seen:
                         seen.add(v.source_id)
                         results.append(v)
-            except Exception:
+            except Exception as e:
+                logger.warning("career.habr.com request failed (page %d): %s", page, e)
                 break
         return results
 

@@ -1,10 +1,13 @@
 import re
+import logging
 import httpx
 from datetime import datetime, timedelta, timezone
 from bs4 import BeautifulSoup
 from scrapers.base import BaseScraper, VacancyData
 from core.config import settings
 from utils.text_cleaner import clean_html, extract_salary_numbers
+
+logger = logging.getLogger(__name__)
 
 
 HH_API = "https://api.hh.ru/vacancies"
@@ -66,8 +69,6 @@ class HHScraper(BaseScraper):
         max_pages = 3
         base_params = {"text": query, "per_page": 50, "search_field": "name", "order_by": "publication_time"}
         if city:
-            import logging
-            logger = logging.getLogger(__name__)
             if city in CITY_IDS:
                 base_params["area"] = CITY_IDS[city]
             else:
@@ -79,11 +80,11 @@ class HHScraper(BaseScraper):
                 resp = await self.client.get(HH_API, params=params, headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
-            except Exception:
+            except Exception as e:
+                logger.warning("hh.ru API request failed (page %d): %s", page, e)
                 break
 
             if not isinstance(data, dict):
-                logger = logging.getLogger(__name__)
                 logger.warning("hh.ru returned non-dict response: %s", type(data).__name__)
                 break
 
@@ -167,7 +168,8 @@ class HHScraper(BaseScraper):
             try:
                 resp = await self.client.get(HH_SEARCH_URL, params=params)
                 resp.raise_for_status()
-            except Exception:
+            except Exception as e:
+                logger.warning("hh.ru HTML request failed (page %d): %s", page, e)
                 break
 
             soup = BeautifulSoup(resp.text, "lxml")
