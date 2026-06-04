@@ -33,7 +33,8 @@ class TrudvsemScraper(BaseScraper):
                 logger.warning("Trudvsem API request failed (page %d): %s", page, e)
                 break
 
-            for item in data.get("results", {}).get("vacancies", []):
+            vacancies = data.get("results", {}).get("vacancies", [])
+            for item in vacancies:
                 try:
                     v = item.get("vacancy", {})
                     if not v.get("job-name"):
@@ -145,5 +146,10 @@ class TrudvsemScraper(BaseScraper):
                     ))
                 except Exception:
                     continue
+
+            # No more pages: trudvsem returns HTTP 500 for offsets past the
+            # last result, so stop once a page comes back not full.
+            if len(vacancies) < 100:
+                break
 
         return results

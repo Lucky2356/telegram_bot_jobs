@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import re
 from collections import deque
 from time import monotonic
 from aiogram import Bot
@@ -561,25 +562,60 @@ class Scheduler:
             score -= 45
         return max(0, min(score, 100))
 
+    # Russian declensions change word endings ("поддержка" → "поддержки"), so
+    # tokens are compared by shared stem instead of exact string equality.
+    def _stem_match(self, a: str, b: str) -> bool:
+        if a == b:
+            return True
+        if len(a) < 4 or len(b) < 4:
+            return False
+        common = 0
+        for ca, cb in zip(a, b):
+            if ca != cb:
+                break
+            common += 1
+        return common >= max(4, min(len(a), len(b)) - 3)
+
+    def _word_tokens(self, text: str) -> list[str]:
+        return re.findall(r"\w+", text, re.UNICODE)
+
+    def _token_in(self, token: str, tokens: list[str]) -> bool:
+        return any(self._stem_match(token, other) for other in tokens)
+
+    def _stem_sequence_in(self, needles: list[str], haystack: list[str]) -> bool:
+        count = len(needles)
+        if not count or count > len(haystack):
+            return False
+        for i in range(len(haystack) - count + 1):
+            if all(self._stem_match(needles[j], haystack[i + j]) for j in range(count)):
+                return True
+        return False
+
     def _matches_keywords(self, vac: VacancyData, keywords: list[str]) -> bool:
         if not keywords:
             return True
-        title_haystack = self._normalize_search_text(vac.title or "")
-        full_haystack = self._normalize_search_text(f"{vac.title} {vac.description or ''}")
+        title = self._normalize_search_text(vac.title or "")
+        title_tokens = self._word_tokens(title)
+        full_tokens = self._word_tokens(
+            self._normalize_search_text(f"{vac.title} {vac.description or ''}")
+        )
+        has_anchor = self._title_has_role_anchor(title)
         for kw in keywords:
             query = self._normalize_search_text(kw.strip()) if kw else ""
             if not query:
                 continue
-            if query in title_haystack:
+            # Fast path: the exact phrase appears verbatim in the title.
+            if query in title:
                 return True
-            tokens = [token for token in query.split() if len(token) > 1]
-            if len(tokens) > 1:
-                if all(token in title_haystack for token in tokens):
-                    return True
-                if query in full_haystack and self._title_has_role_anchor(title_haystack):
-                    return True
+            q_tokens = [token for token in self._word_tokens(query) if len(token) > 1]
+            if not q_tokens:
                 continue
-            if query in full_haystack and self._title_has_role_anchor(title_haystack):
+            # Strict: every query token is present in the TITLE (declension-aware).
+            if all(self._token_in(token, title_tokens) for token in q_tokens):
+                return True
+            # Fallback: the title names a role and the full phrase appears
+            # consecutively (declension-aware) across title + description.
+            if has_anchor and self._stem_sequence_in(q_tokens, full_tokens):
                 return True
         return False
 

@@ -426,6 +426,34 @@ def test_scheduler_matches_description_keyword_when_title_has_role_anchor(db):
     assert scheduler._matches_keywords(vacancy, ["Terraform"]) is True
 
 
+def test_scheduler_matches_keyword_across_russian_declensions(db):
+    scheduler = Scheduler(db, bot=object())
+    vacancy = VacancyData(
+        source="hh",
+        source_id="support-genitive",
+        title="Инженер технической поддержки",
+        company="IT Co",
+        url="https://example.com/support-genitive",
+    )
+
+    # Nominative keyword must match the genitive-case title.
+    assert scheduler._matches_keywords(vacancy, ["Техническая поддержка"]) is True
+
+
+def test_scheduler_declension_match_still_rejects_unrelated_role(db):
+    scheduler = Scheduler(db, bot=object())
+    vacancy = VacancyData(
+        source="hh",
+        source_id="sales-manager",
+        title="Менеджер по продажам",
+        company="Sales Co",
+        description="Холодные звонки, выполнение плана продаж.",
+        url="https://example.com/sales",
+    )
+
+    assert scheduler._matches_keywords(vacancy, ["Техническая поддержка"]) is False
+
+
 @pytest.mark.asyncio
 async def test_scheduler_repeat_check_keeps_results_without_duplicate_telegram_send(db):
     class RepeatScraper:
